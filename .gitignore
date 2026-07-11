@@ -1,0 +1,17 @@
+# Build
+dist/
+*.tsbuildinfo
+
+# Node
+node_modules/
+package-lock.json
+
+# Test coverage
+coverage/
+
+# OS
+.DS_Store
+
+# Environment
+.env
+.env.local
