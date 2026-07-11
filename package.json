@@ -1,0 +1,36 @@
+{
+  "name": "@cambium-protocol/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for Cambium Protocol — carbon credit registry, marketplace, and retirement on Stellar/Soroban",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "test": "jest --verbose",
+    "test:unit": "jest --verbose test/unit",
+    "test:integration": "jest --verbose test/integration",
+    "lint": "eslint src/ test/",
+    "clean": "rm -rf dist"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github-ogaziedaniel80-droid:cambium-protocol/cambium-sdk.git"
+  },
+  "keywords": ["stellar", "soroban", "carbon-credits", "cambium", "sdk"],
+  "author": "Cambium Protocol",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@stellar/stellar-sdk": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.4.0"
+  },
+  "peerDependencies": {
+    "@stellar/stellar-sdk": ">=12.0.0"
+  }
+}
