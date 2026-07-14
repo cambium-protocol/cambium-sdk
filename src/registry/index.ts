@@ -82,7 +82,7 @@ export class RegistryModule {
     const args = [
       StellarSdk.nativeToScVal(
         {
-          id: StellarSdk.Address(project.id),
+          id: new StellarSdk.Address(project.id),
           methodology: StellarSdk.nativeToScVal(project.methodology, {
             type: 'symbol',
           }),
@@ -139,7 +139,7 @@ export class RegistryModule {
           ),
           public_inputs: StellarSdk.nativeToScVal(
             proof.publicInputs.map((pi) =>
-              StellarSdk.Address(pi).toScVal(),
+              new StellarSdk.Address(pi).toScVal(),
             ),
             { type: 'vec' },
           ),
