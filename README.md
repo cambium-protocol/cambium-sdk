@@ -69,10 +69,11 @@ const client = new CambiumClient({
   network: 'testnet',
   rpcUrl: 'https://soroban-testnet.stellar.org',
   contracts: {
-    registry: 'C...REGISTRY_ID',
-    creditToken: 'C...TOKEN_ID',
-    marketplace: 'C...MARKETPLACE_ID',
-    retirement: 'C...RETIREMENT_ID',
+    registry: 'CBSLLVCIZBXKPHY73PN5DVHQKNGK4FAZBXMQLKZCJABABUX5OQGPHC43',
+    creditToken: 'CBRBMYB6UTJEMMSBQQPYHAIO5QWJAT4EBPIFTEEB6MRY6ZZD5NS5KY36',
+    marketplace: 'CAKXZQTCVDSGVF2BU5FY636O4TDCAX5UJCWYGQKDKMOA5QNBDKPXZ5S7',
+    retirement: 'CDIHLUARSMSYU27QRKXBWVK5HXIJRUAQ3SYQYCK3MZ2UKMCRB275H3G5',
+    zkVerifier: 'CDHHVK26VAEP4APPELQLJQLZUKMCDSXGBWT7K6V7L7T6CHHRDY2MUAD7',
   },
 });
 
@@ -236,10 +237,9 @@ sdk-js/
 │   └── index.ts
 ├── test/
 │   ├── unit/
-│   └── integration/          # runs against local Soroban sandbox
+│   └── integration/          # runs against testnet deployment
 ├── examples/
-│   ├── node-script/
-│   └── react-app/
+│   └── node-script/          # runnable Node.js example against testnet
 ├── docs/
 ├── package.json
 ├── tsconfig.json
@@ -269,10 +269,16 @@ npm run link:local-contracts -- ../contracts/deployed-addresses.local.json
 
 ```bash
 npm run test:unit          # mocked contract responses
-npm run test:integration   # requires a running local Soroban sandbox with contracts deployed
+npm run test:integration   # requires deployed addresses (see below)
 ```
 
-Integration tests assume `contracts` has been deployed locally per that repo's README, with its address file available at the path configured in `test/integration/setup.ts`.
+Integration tests connect to Stellar testnet and verify the SDK against the live deployed contracts. They read contract addresses from `DEPLOYED_ADDRESSES_PATH` (defaulting to `../contracts/deployed-addresses.testnet.json`):
+
+```bash
+npm run test:integration
+# or explicitly:
+DEPLOYED_ADDRESSES_PATH=../contracts/deployed-addresses.testnet.json npm run test:integration
+```
 
 ---
 
@@ -282,9 +288,34 @@ This SDK follows semver, but note that **major version bumps track `contracts` i
 
 ---
 
+## Status
+
+**Version 0.1.0 — testnet**
+
+| Module | Status |
+|---|---|
+| Registry (read) | Working — `getProject`, `getVintage` verified against testnet |
+| Registry (write) | Stub — `registerProject`, `requestMint` build unsigned txs, not yet tested end-to-end |
+| Credits | Working — `balanceOf`, `transfer` verified against testnet |
+| Marketplace | Partial — `getPool`, `quote`, `swap` build and simulate; `placeLimitOrder`, `cancelOrder` throw `NotYetImplementedError` |
+| Retirement | Working — `retire` (public path) verified against testnet; `shield: true` path throws `NotYetImplementedError` (shielded retirement deferred) |
+| Wallet integration | Working — `FreighterSigner` adapter shipped; `Signer` interface ready for other wallets |
+
+---
+
+## Roadmap
+
+- [ ] Limit order book in marketplace (place, cancel, fill)
+- [ ] Shielded retirement flow (requires `group_membership` ZK circuit + multi-contributor ceremony)
+- [ ] Off-chain event indexer for `listProjects` / `listRetirements` (Soroban storage doesn't support iteration)
+- [ ] React Native compatibility pass
+- [ ] Mainnet audit before mainnet deployment
+
+---
+
 ## Contributing
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md). Any new SDK method must include both a unit test (mocked) and an integration test (against local sandbox).
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md). Any new SDK method must include both a unit test (mocked) and an integration test (against testnet deployment).
 
 ## License
 
