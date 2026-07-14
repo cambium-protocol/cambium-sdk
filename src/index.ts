@@ -18,6 +18,8 @@ export {
   TransferParams,
   SwapParams,
   RetireParams,
+  RetirementFilter,
+  RetireResult,
   ProjectFilter,
 } from './types';
 
