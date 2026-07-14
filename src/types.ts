@@ -95,3 +95,16 @@ export interface ProjectFilter {
   methodology?: string;
   geography?: string;
 }
+
+/** Filter for listing retirement records. */
+export interface RetirementFilter {
+  projectId?: string;
+  retiree?: string;
+}
+
+/** Result of a retirement operation. */
+export interface RetireResult {
+  record: RetirementRecord;
+  /** The signed transaction XDR, if a signer was configured. */
+  signedXdr?: string;
+}
