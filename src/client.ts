@@ -161,7 +161,7 @@ export class CambiumClient {
    * Submit a signed transaction to the network.
    */
   async submit(signedXdr: string): Promise<StellarSdk.SorobanRpc.Api.SendTransactionResponse> {
-    const transaction = StellarSdk.TransactionBuilder.fromXdr(
+    const transaction = StellarSdk.TransactionBuilder.fromXDR(
       signedXdr,
       this.networkPassphrase,
     );
