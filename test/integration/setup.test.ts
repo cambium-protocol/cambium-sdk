@@ -90,9 +90,11 @@ describe('Integration: SDK against testnet', () => {
     expect(typeof client.marketplace.swap).toBe('function');
   });
 
-  test('retirement module is accessible (stub)', async () => {
+  test('retirement module is accessible', async () => {
     if (!client) return;
     expect(client.retirement).toBeDefined();
     expect(typeof client.retirement.retire).toBe('function');
+    expect(typeof client.retirement.getRetirement).toBe('function');
+    expect(typeof client.retirement.listRetirements).toBe('function');
   });
 });
