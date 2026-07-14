@@ -177,7 +177,18 @@ describe('RetirementModule', () => {
     },
   };
 
-  test('retire throws NotYetImplementedError', async () => {
+  test('retire (public) builds transaction successfully', async () => {
+    const client = new CambiumClient(validConfig);
+    const tx = await client.retirement.retire({
+      from: 'GABC...',
+      projectId: 'test-project',
+      vintageYear: 2025,
+      amount: '100',
+    });
+    expect(tx).toBeDefined();
+  });
+
+  test('retire with shield: true throws NotYetImplementedError', async () => {
     const client = new CambiumClient(validConfig);
     await expect(
       client.retirement.retire({
@@ -185,14 +196,20 @@ describe('RetirementModule', () => {
         projectId: 'test-project',
         vintageYear: 2025,
         amount: '100',
+        shield: true,
       }),
     ).rejects.toThrow(NotYetImplementedError);
   });
 
-  test('getRetirement throws NotYetImplementedError', async () => {
+  test('getRetirement calls invokeContract correctly', async () => {
     const client = new CambiumClient(validConfig);
-    await expect(
-      client.retirement.getRetirement('test-id'),
-    ).rejects.toThrow(NotYetImplementedError);
+    const record = await client.retirement.getRetirement('test-id');
+    expect(record).toBeDefined();
+  });
+
+  test('listRetirements returns array', async () => {
+    const client = new CambiumClient(validConfig);
+    const records = await client.retirement.listRetirements();
+    expect(Array.isArray(records)).toBe(true);
   });
 });
