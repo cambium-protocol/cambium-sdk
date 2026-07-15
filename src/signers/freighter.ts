@@ -25,9 +25,8 @@ export class FreighterSigner implements Signer {
   private async getApi(): Promise<FreighterApi> {
     if (!this.freighterApi) {
       try {
-        // Dynamic require to avoid compile-time dependency on @freighter/freighter-api
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        this.freighterApi = require('@freighter/freighter-api');
+        // @ts-expect-error — @freighter/freighter-api is an optional peer dependency
+        this.freighterApi = await import('@freighter/freighter-api');
       } catch {
         throw new Error(
           'Freighter API not available. Install @freighter/freighter-api: ' +
