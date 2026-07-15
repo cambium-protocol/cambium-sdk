@@ -44,3 +44,4 @@ export {
 
 // Signers
 export { Signer } from './signers/types';
+export { FreighterSigner } from './signers/freighter';
