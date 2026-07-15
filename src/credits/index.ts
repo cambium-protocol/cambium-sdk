@@ -9,6 +9,7 @@
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { CambiumClient } from '../client';
 import { TransferParams } from '../types';
+import { ConfigError } from '../errors';
 
 export class CreditsModule {
   private client: CambiumClient;
@@ -67,7 +68,7 @@ export class CreditsModule {
     const tx = await this.transfer(params);
 
     if (!this.client.signer) {
-      throw new Error(
+      throw new ConfigError(
         'transferAndSubmit requires a signer in the client config',
       );
     }
