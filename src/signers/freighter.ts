@@ -12,17 +12,22 @@
 
 import { Signer } from './types';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FreighterApi = any;
+
 export class FreighterSigner implements Signer {
-  private freighterApi: typeof import('@freighter/freighter-api') | null = null;
+  private freighterApi: FreighterApi | null = null;
 
   constructor() {
     // Lazy-load freighter-api to avoid hard dependency at import time
   }
 
-  private async getApi() {
+  private async getApi(): Promise<FreighterApi> {
     if (!this.freighterApi) {
       try {
-        this.freighterApi = await import('@freighter/freighter-api');
+        // Dynamic require to avoid compile-time dependency on @freighter/freighter-api
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        this.freighterApi = require('@freighter/freighter-api');
       } catch {
         throw new Error(
           'Freighter API not available. Install @freighter/freighter-api: ' +

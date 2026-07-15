@@ -57,6 +57,9 @@ export class CambiumClient {
     if (!config.contracts?.marketplace) {
       throw new ConfigError('marketplace contract address is required');
     }
+    if (!config.contracts?.retirement) {
+      throw new ConfigError('retirement contract address is required');
+    }
 
     this.network = config.network;
     this.rpcUrl = config.rpcUrl;
