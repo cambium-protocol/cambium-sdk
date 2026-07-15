@@ -14,11 +14,12 @@
     "test:unit": "jest --verbose test/unit",
     "test:integration": "jest --verbose test/integration",
     "lint": "eslint src/ test/",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "link:local-contracts": "node -e \"const fs=require('fs');const p=process.argv[2]||'../contracts/deployed-addresses.local.json';if(!fs.existsSync(p)){console.error('File not found:',p);process.exit(1)}fs.copyFileSync(p,'./deployed-addresses.local.json');console.log('Linked:',p)\""
   },
   "repository": {
     "type": "git",
-    "url": "git@github-ogaziedaniel80-droid:cambium-protocol/cambium-sdk.git"
+    "url": "git@github.com:cambium-protocol/cambium-sdk.git"
   },
   "keywords": [
     "stellar",
