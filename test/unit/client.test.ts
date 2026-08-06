@@ -10,7 +10,6 @@ import {
   NotYetImplementedError,
   SimulationError,
 } from '../../src/errors';
-
 // Mock the StellarSdk module
 jest.mock('@stellar/stellar-sdk', () => {
   const real = jest.requireActual('@stellar/stellar-sdk');
@@ -312,7 +311,20 @@ describe('RetirementModule', () => {
     expect(tx).toBeDefined();
   });
 
-  test('retire with shield: true throws NotYetImplementedError', async () => {
+  test('retire with shield: true builds transaction with nullifier', async () => {
+    const client = new CambiumClient(validConfig);
+    const tx = await client.retirement.retire({
+      from: 'GABC...',
+      projectId: '33'.repeat(32),
+      vintageYear: 2025,
+      amount: '100',
+      shield: true,
+      nullifier: 'aa'.repeat(32),
+    });
+    expect(tx).toBeDefined();
+  });
+
+  test('retire with shield: true requires a nullifier', async () => {
     const client = new CambiumClient(validConfig);
     await expect(
       client.retirement.retire({
@@ -322,7 +334,21 @@ describe('RetirementModule', () => {
         amount: '100',
         shield: true,
       }),
-    ).rejects.toThrow(NotYetImplementedError);
+    ).rejects.toThrow(ConfigError);
+  });
+
+  test('retire rejects a zero nullifier for shielded retirement', async () => {
+    const client = new CambiumClient(validConfig);
+    await expect(
+      client.retirement.retire({
+        from: 'GABC...',
+        projectId: '33'.repeat(32),
+        vintageYear: 2025,
+        amount: '100',
+        shield: true,
+        nullifier: '00'.repeat(32),
+      }),
+    ).rejects.toThrow(ConfigError);
   });
 
   test('getRetirement calls invokeContract correctly', async () => {

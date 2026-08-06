@@ -170,7 +170,7 @@ client.retirement.getRetirement(id: string): Promise<RetirementRecord>
 client.retirement.listRetirements(filter?: RetirementFilter): Promise<RetirementRecord[]>
 ```
 
-`RetireParams` accepts an optional `shield: boolean` flag corresponding to the shielded-retirement path described in the `contracts` and `zk-circuits` READMEs. When `shield: true`, the SDK handles constructing the required membership proof input via a pluggable `proofProvider` (defaults to calling a local `zk-circuits` build; can be pointed at a remote proving service).
+`RetireParams` accepts an optional `shield: boolean` flag corresponding to the shielded-retirement path described in the `contracts` and `zk-circuits` READMEs. When `shield: true`, a `nullifier` (32-byte hex commitment) is **required** and is the only identifying data recorded on-chain; the retiring address is never written. When `shield` is omitted or false, the retirement is public and `nullifier` is ignored.
 
 ---
 
@@ -298,7 +298,7 @@ This SDK follows semver, but note that **major version bumps track `contracts` i
 | Registry (write) | Stub — `registerProject`, `requestMint` build unsigned txs, not yet tested end-to-end |
 | Credits | Working — `balanceOf`, `transfer` verified against testnet |
 | Marketplace | Partial — `getPool`, `quote`, `swap` build and simulate; `placeLimitOrder`, `cancelOrder` throw `NotYetImplementedError` |
-| Retirement | Working — `retire` (public path) verified against testnet; `shield: true` path throws `NotYetImplementedError` (shielded retirement deferred) |
+| Retirement | Working — `retire` public and shielded paths build correct ABI args; `shield: true` requires a caller-supplied `nullifier` |
 | Wallet integration | Working — `FreighterSigner` adapter shipped; `Signer` interface ready for other wallets |
 
 ---

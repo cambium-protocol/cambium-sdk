@@ -18,7 +18,7 @@ import {
   RetirementFilter,
   RetireeRef,
 } from '../types';
-import { NotYetImplementedError } from '../errors';
+import { ConfigError } from '../errors';
 import {
   asAmount,
   asBytes,
@@ -45,18 +45,26 @@ export class RetirementModule {
   /**
    * Build an unsigned transaction to retire carbon credits.
    *
-   * @param params - Retirement parameters (from, projectId, vintageYear, amount, shield?)
+   * @param params - Retirement parameters (from, projectId, vintageYear,
+   * amount, shield?, nullifier?)
    * @returns An unsigned transaction ready for signing and submission.
    *
-   * When `shield: true`, throws NotYetImplementedError because the underlying
-   * contract does not yet support shielded retirement. This is never a silent
-   * success — the contract would also reject it, and we surface that early.
+   * Retirements are public by default: the retiring address is recorded
+   * on-chain. When `shield: true`, only `nullifier` is recorded — the caller
+   * must supply a 32-byte nullifier commitment derived off-chain from a
+   * secret so the contract cannot link the retirement back to the caller.
    */
   async retire(params: RetireParams): Promise<StellarSdk.Transaction> {
-    if (params.shield) {
-      throw new NotYetImplementedError(
-        'shielded retirement (shield: true) — contract does not yet support this path',
+    const shield = params.shield ?? false;
+    const nullifier = params.nullifier ?? '00'.repeat(32);
+
+    if (shield && !params.nullifier) {
+      throw new ConfigError(
+        'nullifier is required when shield is true',
       );
+    }
+    if (shield && nullifier === '00'.repeat(32)) {
+      throw new ConfigError('nullifier must be non-zero for shielded retirement');
     }
 
     const args = [
@@ -64,7 +72,8 @@ export class RetirementModule {
       idToScVal(params.projectId),
       StellarSdk.nativeToScVal(params.vintageYear, { type: 'u32' }),
       StellarSdk.nativeToScVal(params.amount, { type: 'i128' }),
-      StellarSdk.nativeToScVal(false, { type: 'bool' }),
+      StellarSdk.nativeToScVal(shield, { type: 'bool' }),
+      idToScVal(nullifier),
     ];
 
     return this.client.buildTransaction(

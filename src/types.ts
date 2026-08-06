@@ -83,11 +83,24 @@ export interface SwapParams {
 
 /** Parameters for retirement. */
 export interface RetireParams {
+  /** The address retiring the credits (authorizes the call). */
   from: string;
+  /** The project these credits belong to (32-byte hex id). */
   projectId: string;
+  /** The vintage year of the credits. */
   vintageYear: number;
+  /** Number of credits to retire. */
   amount: string;
+  /**
+   * When true, only the `nullifier` is recorded on-chain (the retiree's
+   * identity is not revealed). Defaults to false.
+   */
   shield?: boolean;
+  /**
+   * Identity-hiding commitment for shielded retirements (32-byte hex).
+   * Required when `shield: true`; ignored otherwise.
+   */
+  nullifier?: string;
 }
 
 /** Filter for listing projects. */
