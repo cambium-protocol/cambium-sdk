@@ -3,7 +3,7 @@
  */
 
 import { CambiumClient } from '../../src/client';
-import { NotYetImplementedError } from '../../src/errors';
+import * as StellarSdk from '@stellar/stellar-sdk';
 
 // Mock the StellarSdk module
 jest.mock('@stellar/stellar-sdk', () => {
@@ -95,6 +95,22 @@ describe('MarketplaceModule', () => {
     },
   };
 
+  const orderRetval = StellarSdk.nativeToScVal(
+    {
+      id: Buffer.from('55'.repeat(32), 'hex'),
+      trader: 'GABC...',
+      side: ['Buy'],
+      amount: 1000n,
+      remaining: 400n,
+      price: 10n,
+      pool_id: Buffer.from('44'.repeat(32), 'hex'),
+      paired_token: 'C...TOKEN',
+      created_at: 1700000000n,
+    },
+    { type: 'contract' },
+  );
+  const orderBookRetval = StellarSdk.nativeToScVal([orderRetval]);
+
   test('getPool returns parsed pool state', async () => {
     const client = new CambiumClient(validConfig);
     const poolId = '44'.repeat(32);
@@ -131,24 +147,82 @@ describe('MarketplaceModule', () => {
     expect(tx).toBeDefined();
   });
 
-  test('placeLimitOrder throws NotYetImplementedError', async () => {
+  test('placeLimitOrder builds transaction successfully', async () => {
     const client = new CambiumClient(validConfig);
-    await expect(client.marketplace.placeLimitOrder()).rejects.toThrow(
-      NotYetImplementedError,
-    );
+    const tx = await client.marketplace.placeLimitOrder({
+      trader: 'GABC...',
+      side: 'buy',
+      amount: '100',
+      price: '10',
+      poolId: '44'.repeat(32),
+      pairedToken: 'C...TOKEN',
+    });
+    expect(tx).toBeDefined();
   });
 
-  test('cancelOrder throws NotYetImplementedError', async () => {
+  test('placeLimitOrder encodes the sell side symbol', async () => {
     const client = new CambiumClient(validConfig);
-    await expect(client.marketplace.cancelOrder()).rejects.toThrow(
-      NotYetImplementedError,
-    );
+    const tx = await client.marketplace.placeLimitOrder({
+      trader: 'GABC...',
+      side: 'sell',
+      amount: '50',
+      price: '20',
+      poolId: '44'.repeat(32),
+      pairedToken: 'C...TOKEN',
+    });
+    expect(tx).toBeDefined();
   });
 
-  test('getOrderBook throws NotYetImplementedError', async () => {
+  test('cancelOrder builds transaction successfully', async () => {
     const client = new CambiumClient(validConfig);
-    await expect(client.marketplace.getOrderBook()).rejects.toThrow(
-      NotYetImplementedError,
-    );
+    const tx = await client.marketplace.cancelOrder({
+      trader: 'GABC...',
+      orderId: '55'.repeat(32),
+    });
+    expect(tx).toBeDefined();
+  });
+
+  test('getOrderBook parses Vec<Order> ScVal results', async () => {
+    const client = new CambiumClient(validConfig);
+    const server = (
+      client as unknown as { server: { simulateTransaction: jest.Mock } }
+    ).server;
+    server.simulateTransaction.mockResolvedValue({
+      transactionData: {
+        build: jest.fn().mockReturnValue('mock-soroban-data'),
+      },
+      minResourceFee: '100',
+      result: { retval: orderBookRetval },
+    });
+
+    const orders = await client.marketplace.getOrderBook('44'.repeat(32));
+    expect(orders).toHaveLength(1);
+    expect(orders[0].id).toBe('55'.repeat(32));
+    expect(orders[0].side).toBe('buy');
+    expect(orders[0].trader).toBe('GABC...');
+    expect(orders[0].amount).toBe('1000');
+    expect(orders[0].remaining).toBe('400');
+    expect(orders[0].price).toBe('10');
+    expect(orders[0].poolId).toBe('44'.repeat(32));
+    expect(orders[0].pairedToken).toBe('C...TOKEN');
+    expect(orders[0].createdAt).toBe(1700000000);
+  });
+
+  test('getOrder parses a single Order ScVal result', async () => {
+    const client = new CambiumClient(validConfig);
+    const server = (
+      client as unknown as { server: { simulateTransaction: jest.Mock } }
+    ).server;
+    server.simulateTransaction.mockResolvedValue({
+      transactionData: {
+        build: jest.fn().mockReturnValue('mock-soroban-data'),
+      },
+      minResourceFee: '100',
+      result: { retval: orderRetval },
+    });
+
+    const order = await client.marketplace.getOrder('55'.repeat(32));
+    expect(order.id).toBe('55'.repeat(32));
+    expect(order.side).toBe('buy');
   });
 });

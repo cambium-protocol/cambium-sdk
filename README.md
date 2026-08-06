@@ -155,12 +155,20 @@ client.credits.transferAndSubmit(params: TransferParams): Promise<TxResult> // r
 
 ```typescript
 client.marketplace.getPool(poolId: string): Promise<PoolState>
-client.marketplace.quote(params: QuoteParams): Promise<Quote>              // read-only price estimate, no tx
-client.marketplace.swap(params: SwapParams): Promise<Transaction>          // unsigned
-client.marketplace.placeLimitOrder(params: OrderParams): Promise<Transaction>
-client.marketplace.cancelOrder(orderId: string): Promise<Transaction>
-client.marketplace.getOrderBook(poolId: string): Promise<OrderBookSnapshot>
+client.marketplace.quote(params: { poolId: string; amountIn: string }): Promise<Quote>  // read-only price estimate, no tx
+client.marketplace.swap(params: SwapParams): Promise<Transaction>                       // unsigned
+client.marketplace.placeLimitOrder(params: PlaceLimitOrderParams): Promise<Transaction> // unsigned
+client.marketplace.cancelOrder(params: CancelOrderParams): Promise<Transaction>         // unsigned
+client.marketplace.getOrder(orderId: string): Promise<Order>
+client.marketplace.getOrderBook(poolId: string): Promise<Order[]>
 ```
+
+Limit orders rest on the marketplace order book. The sold asset is escrowed
+immediately: sell orders escrow `amount` credit tokens, buy orders escrow
+`amount * price` units of the paired asset — the caller must approve the
+marketplace to transfer the escrow token (e.g. via
+`client.credits.approve` / the paired token's approve) before submitting a
+`placeLimitOrder` transaction.
 
 ### Retirement
 
@@ -297,7 +305,7 @@ This SDK follows semver, but note that **major version bumps track `contracts` i
 | Registry (read) | Working — `getProject`, `getVintage` verified against testnet |
 | Registry (write) | Stub — `registerProject`, `requestMint` build unsigned txs, not yet tested end-to-end |
 | Credits | Working — `balanceOf`, `transfer` verified against testnet |
-| Marketplace | Partial — `getPool`, `quote`, `swap` build and simulate; `placeLimitOrder`, `cancelOrder` throw `NotYetImplementedError` |
+| Marketplace | Working — `getPool`, `quote`, `swap`, `placeLimitOrder`, `cancelOrder`, `getOrder`, `getOrderBook` build correct ABI args and parse ScVal results |
 | Retirement | Working — `retire` public and shielded paths build correct ABI args; `shield: true` requires a caller-supplied `nullifier` |
 | Wallet integration | Working — `FreighterSigner` adapter shipped; `Signer` interface ready for other wallets |
 

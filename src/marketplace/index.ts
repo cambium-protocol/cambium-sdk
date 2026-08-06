@@ -1,23 +1,35 @@
 /**
- * Marketplace module — read and write operations for AMM pools and trading.
+ * Marketplace module — read and write operations for AMM pools and the order
+ * book.
  *
  * Maps to the `marketplace` Soroban contract:
  * - getPool(poolId) -> PoolState
  * - quote(poolId, amountIn) -> Quote (read-only price estimate)
  * - swap(params) -> Transaction (unsigned)
- * - placeLimitOrder -> stub (NotYetImplemented)
+ * - placeLimitOrder / cancelOrder -> Transaction (unsigned)
+ * - getOrder(orderId) / getOrderBook(poolId) -> Order reads
  */
 
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { CambiumClient } from '../client';
-import { PoolState, Quote, SwapParams } from '../types';
-import { NotYetImplementedError, PoolNotFoundError } from '../errors';
+import {
+  CancelOrderParams,
+  Order,
+  PlaceLimitOrderParams,
+  PoolState,
+  Quote,
+  SwapParams,
+} from '../types';
 import {
   asAmount,
+  asNumber,
   asRecord,
+  asSide,
   asString,
+  asVec,
   idFromScVal,
   idToScVal,
+  sideToScVal,
 } from '../scval';
 
 export class MarketplaceModule {
@@ -100,29 +112,89 @@ export class MarketplaceModule {
   }
 
   /**
-   * Place a limit order (not yet implemented — deferred per roadmap).
+   * Build an unsigned transaction to place a limit order on the order book.
+   *
+   * The sold asset is escrowed to the marketplace immediately: sell orders
+   * escrow `amount` credit tokens, buy orders escrow `amount * price` units of
+   * the paired asset (the caller must approve the marketplace to transfer the
+   * escrow token first). The order sweeps resting opposite-side orders that
+   * cross, then rests the unfilled remainder on the book.
+   *
+   * @param params - Order parameters
+   * @returns An unsigned transaction that resolves to the placed order's id.
    */
-  async placeLimitOrder(): Promise<never> {
-    throw new NotYetImplementedError(
-      'limit order book (place_limit_order)',
+  async placeLimitOrder(
+    params: PlaceLimitOrderParams,
+  ): Promise<StellarSdk.Transaction> {
+    const args = [
+      new StellarSdk.Address(params.trader).toScVal(),
+      sideToScVal(params.side),
+      StellarSdk.nativeToScVal(params.amount, { type: 'i128' }),
+      StellarSdk.nativeToScVal(params.price, { type: 'i128' }),
+      idToScVal(params.poolId),
+      new StellarSdk.Address(params.pairedToken).toScVal(),
+    ];
+
+    return this.client.buildTransaction(
+      this.contractId,
+      'place_limit_order',
+      args,
+      params.trader,
     );
   }
 
   /**
-   * Cancel an order (not yet implemented — deferred per roadmap).
+   * Build an unsigned transaction to cancel a resting order and refund its
+   * escrow to the order's trader.
+   *
+   * @param params - Cancellation parameters (trader, orderId)
+   * @returns An unsigned transaction. Errors: Unauthorized if `trader` is not
+   * the owner, NotFound if the order does not exist, OrderClosed if it was
+   * already fully filled or cancelled.
    */
-  async cancelOrder(): Promise<never> {
-    throw new NotYetImplementedError('cancel order');
+  async cancelOrder(
+    params: CancelOrderParams,
+  ): Promise<StellarSdk.Transaction> {
+    const args = [
+      new StellarSdk.Address(params.trader).toScVal(),
+      idToScVal(params.orderId),
+    ];
+
+    return this.client.buildTransaction(
+      this.contractId,
+      'cancel_order',
+      args,
+      params.trader,
+    );
   }
 
   /**
-   * Get the order book (not yet implemented — deferred per roadmap).
+   * Get a single resting order by id.
+   * @param orderId - The order's id (32-byte hex)
    */
-  async getOrderBook(): Promise<never> {
-    throw new NotYetImplementedError('order book');
+  async getOrder(orderId: string): Promise<Order> {
+    const result = await this.client.invokeContract(
+      this.contractId,
+      'get_order',
+      [idToScVal(orderId)],
+    );
+    return this.parseOrder(result);
   }
 
-  // -- Parser --
+  /**
+   * Get all resting orders for a pool.
+   * @param poolId - The pool's id (32-byte hex)
+   */
+  async getOrderBook(poolId: string): Promise<Order[]> {
+    const result = await this.client.invokeContract(
+      this.contractId,
+      'get_orders',
+      [idToScVal(poolId)],
+    );
+    return this.parseOrders(result);
+  }
+
+  // -- Parsers --
 
   private parsePool(value: unknown): PoolState {
     const obj = asRecord(value);
@@ -133,5 +205,24 @@ export class MarketplaceModule {
       creditReserves: asAmount(obj.credit_reserves),
       pairedReserves: asAmount(obj.paired_reserves),
     };
+  }
+
+  private parseOrder(value: unknown): Order {
+    const obj = asRecord(value);
+    return {
+      id: idFromScVal(obj.id),
+      trader: asString(obj.trader),
+      side: asSide(obj.side),
+      amount: asAmount(obj.amount),
+      remaining: asAmount(obj.remaining),
+      price: asAmount(obj.price),
+      poolId: idFromScVal(obj.pool_id),
+      pairedToken: asString(obj.paired_token),
+      createdAt: asNumber(obj.created_at),
+    };
+  }
+
+  private parseOrders(value: unknown): Order[] {
+    return asVec(value).map((order) => this.parseOrder(order));
   }
 }

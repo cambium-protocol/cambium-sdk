@@ -7,7 +7,6 @@ import { CambiumClient } from '../../src/client';
 import {
   ConfigError,
   ContractError,
-  NotYetImplementedError,
   SimulationError,
 } from '../../src/errors';
 // Mock the StellarSdk module
@@ -258,33 +257,6 @@ describe('RegistryModule', () => {
     expect(project.geography).toBe('BRA');
     expect(project.externalRegistryRef).toBe('VERRA:123');
     expect(project.verifyingKeyVersion).toBe(3);
-  });
-});
-
-describe('MarketplaceModule', () => {
-  const validConfig = {
-    network: 'testnet' as const,
-    rpcUrl: 'https://soroban-testnet.stellar.org',
-    contracts: {
-      registry: 'C...REGISTRY',
-      creditToken: 'C...TOKEN',
-      marketplace: 'C...MARKETPLACE',
-      retirement: 'C...RETIREMENT',
-    },
-  };
-
-  test('placeLimitOrder throws NotYetImplementedError', async () => {
-    const client = new CambiumClient(validConfig);
-    await expect(client.marketplace.placeLimitOrder()).rejects.toThrow(
-      NotYetImplementedError,
-    );
-  });
-
-  test('cancelOrder throws NotYetImplementedError', async () => {
-    const client = new CambiumClient(validConfig);
-    await expect(client.marketplace.cancelOrder()).rejects.toThrow(
-      NotYetImplementedError,
-    );
   });
 });
 

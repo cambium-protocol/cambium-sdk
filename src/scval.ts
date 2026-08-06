@@ -140,3 +140,19 @@ export function idFromScVal(value: unknown): string {
   }
   return bytesToHex(bytes);
 }
+
+/** Order book sides encoded on-chain as a one-element vector of symbols
+ * (`Vec<Symbol>`, e.g. `["Buy"]`). */
+export function sideToScVal(side: 'buy' | 'sell'): ScVal {
+  const variant = side === 'buy' ? 'Buy' : 'Sell';
+  return StellarSdk.nativeToScVal([
+    StellarSdk.nativeToScVal(variant, { type: 'symbol' }),
+  ]);
+}
+
+/** Decode an order-side `ScVal` into a lowercase `'buy' | 'sell'`. */
+export function asSide(value: unknown): 'buy' | 'sell' {
+  const variant = asString(asVec(value)[0]).toLowerCase();
+  if (variant === 'sell') return 'sell';
+  return 'buy';
+}
