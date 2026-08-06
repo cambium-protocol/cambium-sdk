@@ -14,6 +14,11 @@ jest.mock('@stellar/stellar-sdk', () => {
       sequence: '0',
     }),
     simulateTransaction: jest.fn().mockResolvedValue({
+      transactionData: {
+        build: jest.fn().mockReturnValue('mock-soroban-data'),
+        toXDR: jest.fn().mockReturnValue('mock-soroban-data'),
+      },
+      minResourceFee: '100',
       result: { retval: '1000' },
     }),
     sendTransaction: jest.fn().mockResolvedValue({

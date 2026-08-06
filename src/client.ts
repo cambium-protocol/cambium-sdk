@@ -14,7 +14,7 @@ import { RegistryModule } from './registry';
 import { CreditsModule } from './credits';
 import { MarketplaceModule } from './marketplace';
 import { RetirementModule } from './retirement';
-import { ConfigError } from './errors';
+import { ConfigError, SimulationError, fromSimulationError } from './errors';
 import { Signer } from './signers/types';
 
 export interface CambiumClientConfig {
@@ -121,7 +121,7 @@ export class CambiumClient {
     const simulation = await this._server.simulateTransaction(transaction);
 
     if (StellarSdk.SorobanRpc.Api.isSimulationError(simulation)) {
-      throw new Error(`Simulation failed: ${simulation.error}`);
+      throw fromSimulationError(simulation.error);
     }
 
     return simulation.result?.retval;
@@ -130,6 +130,13 @@ export class CambiumClient {
   /**
    * Build, simulate, and return an unsigned transaction for a contract call.
    * The transaction is ready for signing and submission.
+   *
+   * On success the transaction is rebuilt with the simulated Soroban resource
+   * footprint (read/write ledger entries, resource fees) attached, so the
+   * signed transaction is accepted by the network when submitted.
+   *
+   * @throws {ContractError} if the contract call is rejected during simulation
+   * @throws {SimulationError} if the simulation fails for another reason
    */
   async buildTransaction(
     contractId: string,
@@ -148,15 +155,18 @@ export class CambiumClient {
       .setTimeout(StellarSdk.TimeoutInfinite)
       .build();
 
-    // Simulate to get resource estimates
+    // Simulate to get the resource footprint and fee estimates
     const simulation = await this._server.simulateTransaction(transaction);
     if (StellarSdk.SorobanRpc.Api.isSimulationError(simulation)) {
-      throw new Error(`Simulation failed: ${simulation.error}`);
+      throw fromSimulationError(simulation.error);
     }
 
-    // Restore with simulated resources
+    // Rebuild the transaction with the simulated footprint and fees attached.
+    // Without this the built transaction is rejected on submission because it
+    // is missing the required Soroban data (ledger entries + resource fee).
     return StellarSdk.TransactionBuilder.cloneFrom(transaction, {
-      fee: StellarSdk.BASE_FEE,
+      fee: simulation.minResourceFee || StellarSdk.BASE_FEE,
+      sorobanData: simulation.transactionData.build(),
     }).build();
   }
 

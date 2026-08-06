@@ -79,3 +79,48 @@ export class ConfigError extends CambiumError {
     this.name = 'ConfigError';
   }
 }
+
+/**
+ * A transaction simulation failed before reaching the network.
+ *
+ * Thrown when the Soroban RPC returns an error from `simulateTransaction`
+ * that is not a recognized contract error code (e.g. a host/VM failure, an
+ * expired ledger entry, or an invalid argument encoding).
+ */
+export class SimulationError extends CambiumError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SimulationError';
+  }
+}
+
+/**
+ * Extract a contract error code embedded in a simulation error string.
+ *
+ * Soroban RPC returns contract errors as strings, e.g.
+ * `host invocation failed: ... ContractError(4) ...`. Returns the numeric
+ * code when one is present, otherwise `undefined`.
+ */
+export function extractContractErrorCode(message: string): number | undefined {
+  const contractError = message.match(/ContractError\((\d+)\)/);
+  if (contractError) return Number(contractError[1]);
+
+  const statusCode = message.match(/(?:error|failed).*?\bcode[:\s]+(\d+)/i);
+  if (statusCode) return Number(statusCode[1]);
+
+  return undefined;
+}
+
+/**
+ * Convert a simulation error string into a typed SDK error.
+ *
+ * Recognized contract error codes surface as `ContractError` (so callers can
+ * inspect `err.code`); anything else surfaces as `SimulationError`.
+ */
+export function fromSimulationError(message: string): CambiumError {
+  const code = extractContractErrorCode(message);
+  if (code !== undefined) {
+    return new ContractError(code, message);
+  }
+  return new SimulationError(message);
+}

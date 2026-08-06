@@ -2,11 +2,13 @@
  * Unit tests for the CambiumClient and registry module.
  */
 
+import * as StellarSdk from '@stellar/stellar-sdk';
 import { CambiumClient } from '../../src/client';
 import {
   ConfigError,
-  NotFoundError,
+  ContractError,
   NotYetImplementedError,
+  SimulationError,
 } from '../../src/errors';
 
 // Mock the StellarSdk module
@@ -18,6 +20,11 @@ jest.mock('@stellar/stellar-sdk', () => {
       sequence: '0',
     }),
     simulateTransaction: jest.fn().mockResolvedValue({
+      transactionData: {
+        build: jest.fn().mockReturnValue('mock-soroban-data'),
+        toXDR: jest.fn().mockReturnValue('mock-soroban-data'),
+      },
+      minResourceFee: '100',
       result: { retval: { str: 'test-value' } },
     }),
     sendTransaction: jest.fn().mockResolvedValue({
@@ -48,8 +55,11 @@ jest.mock('@stellar/stellar-sdk', () => {
         }),
       })),
       {
-        cloneFrom: jest.fn().mockImplementation(() => ({
-          build: jest.fn().mockReturnValue({}),
+        cloneFrom: jest.fn().mockImplementation((_tx: unknown, opts: unknown) => ({
+          build: jest.fn().mockReturnValue({
+            toXDR: jest.fn().mockReturnValue('mock-xdr'),
+            sorobanData: (opts as { sorobanData?: string }).sorobanData,
+          }),
         })),
         fromXdr: jest.fn().mockReturnValue({}),
       },
@@ -77,6 +87,26 @@ describe('CambiumClient', () => {
       retirement: 'C...RETIREMENT',
     },
   };
+
+  const mockServer = () => {
+    const client = new CambiumClient(validConfig);
+    return (client as unknown as { server: { simulateTransaction: jest.Mock } })
+      .server;
+  };
+
+  afterEach(() => {
+    (StellarSdk.SorobanRpc.Api.isSimulationError as unknown as jest.Mock).mockReturnValue(
+      false,
+    );
+    mockServer().simulateTransaction.mockResolvedValue({
+      transactionData: {
+        build: jest.fn().mockReturnValue('mock-soroban-data'),
+        toXDR: jest.fn().mockReturnValue('mock-soroban-data'),
+      },
+      minResourceFee: '100',
+      result: { retval: { str: 'test-value' } },
+    });
+  });
 
   test('creates client with valid config', () => {
     const client = new CambiumClient(validConfig);
@@ -115,6 +145,66 @@ describe('CambiumClient', () => {
     expect(client.credits).toBeDefined();
     expect(client.marketplace).toBeDefined();
     expect(client.retirement).toBeDefined();
+  });
+
+  test('invokeContract throws ContractError on recognized contract error', async () => {
+    mockServer().simulateTransaction.mockResolvedValue({
+      error: 'host invocation failed: ContractError(4)',
+    });
+    (StellarSdk.SorobanRpc.Api.isSimulationError as unknown as jest.Mock).mockReturnValue(
+      true,
+    );
+
+    const client = new CambiumClient(validConfig);
+    const err = await client.registry.getProject('test-id').catch((e) => e);
+    expect(err).toBeInstanceOf(ContractError);
+    expect((err as ContractError).code).toBe(4);
+  });
+
+  test('invokeContract throws SimulationError when no code is present', async () => {
+    mockServer().simulateTransaction.mockResolvedValue({
+      error: 'host invocation failed: Out of resources',
+    });
+    (StellarSdk.SorobanRpc.Api.isSimulationError as unknown as jest.Mock).mockReturnValue(
+      true,
+    );
+
+    const client = new CambiumClient(validConfig);
+    await expect(client.registry.getProject('test-id')).rejects.toThrow(
+      SimulationError,
+    );
+  });
+
+  test('buildTransaction attaches simulated sorobanData and fee', async () => {
+    const client = new CambiumClient(validConfig);
+    const tx = await client.buildTransaction(
+      'C...MARKETPLACE',
+      'swap',
+      [],
+      'GABC...',
+    );
+    const built = tx as unknown as { sorobanData?: string };
+    expect(built.sorobanData).toBe('mock-soroban-data');
+    expect(StellarSdk.TransactionBuilder.cloneFrom).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ fee: '100' }),
+    );
+  });
+
+  test('buildTransaction throws ContractError on contract simulation failure', async () => {
+    mockServer().simulateTransaction.mockResolvedValue({
+      error: 'contract call failed: ContractError(9)',
+    });
+    (StellarSdk.SorobanRpc.Api.isSimulationError as unknown as jest.Mock).mockReturnValue(
+      true,
+    );
+
+    const client = new CambiumClient(validConfig);
+    const err = await client
+      .buildTransaction('C...MARKETPLACE', 'get_pool', [], 'GABC...')
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(ContractError);
+    expect((err as ContractError).code).toBe(9);
   });
 });
 
