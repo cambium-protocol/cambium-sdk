@@ -73,6 +73,33 @@ export interface TransferParams {
   amount: string;
 }
 
+/** Parameters for transferring tokens on behalf of another address. */
+export interface TransferFromParams {
+  /** Address spending the allowance (authorizes the call). */
+  spender: string;
+  /** Address whose tokens are being moved. */
+  from: string;
+  to: string;
+  amount: string;
+}
+
+/** Parameters for approving an allowance. */
+export interface ApproveParams {
+  /** Address granting the allowance (authorizes the call). */
+  from: string;
+  /** Address allowed to spend `from`'s tokens. */
+  spender: string;
+  amount: string;
+}
+
+/** Parameters for reading an allowance. */
+export interface AllowanceParams {
+  /** Token owner. */
+  owner: string;
+  /** Address allowed to spend `owner`'s tokens. */
+  spender: string;
+}
+
 /** Parameters for a swap. */
 export interface SwapParams {
   poolId: string;

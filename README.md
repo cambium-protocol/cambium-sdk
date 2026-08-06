@@ -146,8 +146,14 @@ client.registry.listProjects(filter?: ProjectFilter): Promise<Project[]>
 ### Credits
 
 ```typescript
-client.credits.balanceOf(params: { address: string; projectId: string; vintageYear: number }): Promise<string>
+client.credits.balanceOf(address: string): Promise<string>                // read
+client.credits.allowance(params: AllowanceParams): Promise<string>        // read
+client.credits.admin(): Promise<string>                                   // read
+client.credits.getBurner(): Promise<string | undefined>                   // read
+client.credits.isAllowlisted(address: string): Promise<boolean>           // read
 client.credits.transfer(params: TransferParams): Promise<Transaction>       // unsigned
+client.credits.transferFrom(params: TransferFromParams): Promise<Transaction> // unsigned
+client.credits.approve(params: ApproveParams): Promise<Transaction>         // unsigned
 client.credits.transferAndSubmit(params: TransferParams): Promise<TxResult> // requires signer in config
 ```
 
@@ -305,7 +311,7 @@ This SDK follows semver, but note that **major version bumps track `contracts` i
 |---|---|
 | Registry (read) | Working — `getProject`, `getVintage` verified against testnet |
 | Registry (write) | Stub — `registerProject`, `requestMint` build unsigned txs, not yet tested end-to-end |
-| Credits | Working — `balanceOf`, `transfer` verified against testnet |
+| Credits | Working — SEP-41 `balance`, `transfer`, `transfer_from`, `approve`, `allowance` plus `admin`, `get_burner`, `is_allowlisted` reads |
 | Marketplace | Working — `getPool`, `quote`, `swap`, `createPool`, `placeLimitOrder`, `cancelOrder`, `getOrder`, `getOrderBook` build correct ABI args and parse ScVal results |
 | Retirement | Working — `retire` public and shielded paths build correct ABI args; `shield: true` requires a caller-supplied `nullifier` |
 | Wallet integration | Working — `FreighterSigner` adapter shipped; `Signer` interface ready for other wallets |

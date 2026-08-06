@@ -2,15 +2,21 @@
  * Credits module — read and write operations for the credit token.
  *
  * Maps to the `credit-token` SEP-41 contract:
- * - balanceOf(address) -> string (balance as decimal string)
- * - transfer(from, to, amount) -> Transaction (unsigned)
+ * - balance(id) / allowance(owner, spender) -> reads
+ * - transfer / transferFrom / approve -> Transactions (unsigned)
+ * - admin / getBurner / isAllowlisted -> reads
  */
 
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { CambiumClient } from '../client';
-import { TransferParams } from '../types';
+import {
+  AllowanceParams,
+  ApproveParams,
+  TransferFromParams,
+  TransferParams,
+} from '../types';
 import { ConfigError } from '../errors';
-import { asAmount } from '../scval';
+import { asAmount, asBoolean, asOption, asString } from '../scval';
 
 export class CreditsModule {
   private client: CambiumClient;
@@ -40,6 +46,67 @@ export class CreditsModule {
   }
 
   /**
+   * Get the allowance `spender` has over `owner`'s tokens.
+   * @param params - Allowance parameters (owner, spender)
+   * @returns Allowance as a decimal string
+   */
+  async allowance(params: AllowanceParams): Promise<string> {
+    const result = await this.client.invokeContract(
+      this.contractId,
+      'allowance',
+      [
+        new StellarSdk.Address(params.owner).toScVal(),
+        new StellarSdk.Address(params.spender).toScVal(),
+      ],
+    );
+
+    return asAmount(result);
+  }
+
+  /**
+   * Build an unsigned transaction to approve `spender` to spend up to
+   * `amount` of `from`'s tokens.
+   * @param params - Approval parameters (from, spender, amount)
+   */
+  async approve(params: ApproveParams): Promise<StellarSdk.Transaction> {
+    const args = [
+      new StellarSdk.Address(params.from).toScVal(),
+      new StellarSdk.Address(params.spender).toScVal(),
+      StellarSdk.nativeToScVal(params.amount, { type: 'i128' }),
+    ];
+
+    return this.client.buildTransaction(
+      this.contractId,
+      'approve',
+      args,
+      params.from,
+    );
+  }
+
+  /**
+   * Build an unsigned transaction to transfer `amount` of `from`'s tokens to
+   * `to` using an existing allowance granted to `spender`.
+   * @param params - Transfer-from parameters (spender, from, to, amount)
+   */
+  async transferFrom(
+    params: TransferFromParams,
+  ): Promise<StellarSdk.Transaction> {
+    const args = [
+      new StellarSdk.Address(params.spender).toScVal(),
+      new StellarSdk.Address(params.from).toScVal(),
+      new StellarSdk.Address(params.to).toScVal(),
+      StellarSdk.nativeToScVal(params.amount, { type: 'i128' }),
+    ];
+
+    return this.client.buildTransaction(
+      this.contractId,
+      'transfer_from',
+      args,
+      params.spender,
+    );
+  }
+
+  /**
    * Build an unsigned transaction to transfer credits.
    * @param params - Transfer parameters (from, to, amount)
    * @returns Unsigned transaction ready for signing
@@ -57,6 +124,43 @@ export class CreditsModule {
       args,
       params.from,
     );
+  }
+
+  /**
+   * Get the token contract's admin address (the registry contract on-chain).
+   */
+  async admin(): Promise<string> {
+    const result = await this.client.invokeContract(
+      this.contractId,
+      'admin',
+      [],
+    );
+    return asString(result);
+  }
+
+  /**
+   * Get the authorized burner contract address, if one has been configured.
+   */
+  async getBurner(): Promise<string | undefined> {
+    const result = await this.client.invokeContract(
+      this.contractId,
+      'get_burner',
+      [],
+    );
+    return asOption(result, asString);
+  }
+
+  /**
+   * Check whether an address is allowlisted.
+   * @param address - The address to check
+   */
+  async isAllowlisted(address: string): Promise<boolean> {
+    const result = await this.client.invokeContract(
+      this.contractId,
+      'is_allowlisted',
+      [new StellarSdk.Address(address).toScVal()],
+    );
+    return asBoolean(result);
   }
 
   /**
