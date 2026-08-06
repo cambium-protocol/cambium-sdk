@@ -1,16 +1,17 @@
 /**
- * Registry module — read and write operations for carbon projects and vintages.
+ * Registry module — read and write operations for carbon projects, vintages,
+ * and registry governance.
  *
  * Maps to the `registry` Soroban contract:
- * - getProject(projectId) -> Project
- * - getVintage(projectId, year) -> Vintage
- * - registerProject(project) -> Transaction (unsigned)
- * - requestMint(projectId, vintageYear, amount, proof) -> Transaction (unsigned)
+ * - getProject(projectId) / getVintage(projectId, year) -> reads
+ * - registerProject / requestMint -> Transactions (unsigned)
+ * - getGovernance / getVkey -> reads
+ * - proposeVkeyUpdate / approveVkeyUpdate / executeVkeyUpdate -> Transactions
  */
 
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { CambiumClient } from '../client';
-import { Project, Vintage, ProjectFilter } from '../types';
+import { GovernanceConfig, Project, Vintage, ProjectFilter, VkeyState } from '../types';
 import {
   asAmount,
   asBytes,
@@ -18,6 +19,7 @@ import {
   asOption,
   asRecord,
   asString,
+  asVec,
   idFromScVal,
   idToScVal,
 } from '../scval';
@@ -164,6 +166,127 @@ export class RegistryModule {
   }
 
   // -- Parsers --
+
+  /**
+   * Get the current multi-sig + timelock governance configuration.
+   */
+  async getGovernance(): Promise<GovernanceConfig> {
+    const result = await this.client.invokeContract(
+      this.contractId,
+      'get_governance',
+      [],
+    );
+    return this.parseGovernance(result);
+  }
+
+  /**
+   * Get the canonical verifying key state for a methodology.
+   * @param methodology - Methodology code, e.g. "VM0007"
+   */
+  async getVkey(methodology: string): Promise<VkeyState> {
+    const result = await this.client.invokeContract(
+      this.contractId,
+      'get_vkey',
+      [StellarSdk.nativeToScVal(methodology, { type: 'symbol' })],
+    );
+    return this.parseVkey(result);
+  }
+
+  /**
+   * Build an unsigned transaction to propose a verifying-key update.
+   *
+   * The proposer must be a member of the governance signer set; their
+   * signature counts as the first approval.
+   *
+   * @param params - signer (authorizes the call), methodology, newKey (32-byte hex)
+   * @returns An unsigned transaction that resolves to the proposal id.
+   */
+  async proposeVkeyUpdate(params: {
+    signer: string;
+    methodology: string;
+    newKey: string;
+  }): Promise<StellarSdk.Transaction> {
+    const args = [
+      new StellarSdk.Address(params.signer).toScVal(),
+      StellarSdk.nativeToScVal(params.methodology, { type: 'symbol' }),
+      idToScVal(params.newKey),
+    ];
+
+    return this.client.buildTransaction(
+      this.contractId,
+      'propose_vkey_update',
+      args,
+      params.signer,
+    );
+  }
+
+  /**
+   * Build an unsigned transaction to approve a pending verifying-key update.
+   *
+   * The approver must be a governance signer who has not already approved the
+   * proposal.
+   *
+   * @param params - signer (authorizes the call), proposalId (32-byte hex)
+   * @returns An unsigned transaction that resolves to the total approval count.
+   */
+  async approveVkeyUpdate(params: {
+    signer: string;
+    proposalId: string;
+  }): Promise<StellarSdk.Transaction> {
+    const args = [
+      new StellarSdk.Address(params.signer).toScVal(),
+      idToScVal(params.proposalId),
+    ];
+
+    return this.client.buildTransaction(
+      this.contractId,
+      'approve_vkey_update',
+      args,
+      params.signer,
+    );
+  }
+
+  /**
+   * Build an unsigned transaction to execute a fully-approved, timelock-elapsed
+   * verifying-key update. Execution is permissionless — any account may
+   * submit it once threshold is reached and the timelock has passed.
+   *
+   * @param proposalId - The proposal's id (32-byte hex)
+   * @param sourceAccount - Any account paying for and submitting the tx
+   * @returns An unsigned transaction that resolves to the new VkeyState.
+   */
+  async executeVkeyUpdate(
+    proposalId: string,
+    sourceAccount: string,
+  ): Promise<StellarSdk.Transaction> {
+    const args = [idToScVal(proposalId)];
+
+    return this.client.buildTransaction(
+      this.contractId,
+      'execute_vkey_update',
+      args,
+      sourceAccount,
+    );
+  }
+
+  // -- Parsers --
+
+  private parseGovernance(value: unknown): GovernanceConfig {
+    const obj = asRecord(value);
+    return {
+      threshold: asNumber(obj.threshold),
+      signers: asVec(obj.signers).map((s) => asString(s)),
+      timelockSecs: asNumber(obj.timelock_secs),
+    };
+  }
+
+  private parseVkey(value: unknown): VkeyState {
+    const obj = asRecord(value);
+    return {
+      version: asNumber(obj.version),
+      key: idFromScVal(obj.key),
+    };
+  }
 
   private parseProject(value: unknown): Project {
     const obj = asRecord(value);

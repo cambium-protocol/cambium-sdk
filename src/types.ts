@@ -34,6 +34,24 @@ export interface Vintage {
   totalRetired: string;
 }
 
+/** Multi-sig + timelock governance configuration for the registry. */
+export interface GovernanceConfig {
+  /** Minimum number of signer approvals required to execute an update. */
+  threshold: number;
+  /** Addresses authorized to propose and approve updates. */
+  signers: string[];
+  /** Delay (in seconds) between reaching threshold and execution. */
+  timelockSecs: number;
+}
+
+/** Current canonical verifying key for a methodology. */
+export interface VkeyState {
+  /** Latest version number (bumped on every executed update). */
+  version: number;
+  /** The verifying key bytes (32-byte hex). */
+  key: string;
+}
+
 /** A liquidity pool in the marketplace. */
 export interface PoolState {
   id: string;

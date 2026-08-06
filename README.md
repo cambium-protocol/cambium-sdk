@@ -140,7 +140,14 @@ interface CambiumClientConfig {
 ```typescript
 client.registry.getProject(projectId: string): Promise<Project>
 client.registry.getVintage(projectId: string, year: number): Promise<Vintage>
-client.registry.listProjects(filter?: ProjectFilter): Promise<Project[]>
+client.registry.listProjects(filter?: ProjectFilter): Promise<Project[]>   // requires off-chain indexer
+client.registry.registerProject(project: Project, sourceAccount: string): Promise<Transaction>
+client.registry.requestMint(projectId, vintageYear, amount, proof, sourceAccount): Promise<Transaction>
+client.registry.getGovernance(): Promise<GovernanceConfig>                 // read
+client.registry.getVkey(methodology: string): Promise<VkeyState>           // read
+client.registry.proposeVkeyUpdate(params): Promise<Transaction>            // unsigned (governance signer)
+client.registry.approveVkeyUpdate(params): Promise<Transaction>            // unsigned (governance signer)
+client.registry.executeVkeyUpdate(proposalId: string, sourceAccount: string): Promise<Transaction>
 ```
 
 ### Credits
@@ -310,7 +317,7 @@ This SDK follows semver, but note that **major version bumps track `contracts` i
 | Module | Status |
 |---|---|
 | Registry (read) | Working — `getProject`, `getVintage` verified against testnet |
-| Registry (write) | Stub — `registerProject`, `requestMint` build unsigned txs, not yet tested end-to-end |
+| Registry (write) | Working — `registerProject`, `requestMint`, governance `propose/approve/execute` build unsigned txs with correct ABI args |
 | Credits | Working — SEP-41 `balance`, `transfer`, `transfer_from`, `approve`, `allowance` plus `admin`, `get_burner`, `is_allowlisted` reads |
 | Marketplace | Working — `getPool`, `quote`, `swap`, `createPool`, `placeLimitOrder`, `cancelOrder`, `getOrder`, `getOrderBook` build correct ABI args and parse ScVal results |
 | Retirement | Working — `retire` public and shielded paths build correct ABI args; `shield: true` requires a caller-supplied `nullifier` |

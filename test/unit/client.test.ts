@@ -258,6 +258,89 @@ describe('RegistryModule', () => {
     expect(project.externalRegistryRef).toBe('VERRA:123');
     expect(project.verifyingKeyVersion).toBe(3);
   });
+
+  test('getGovernance parses multi-sig config', async () => {
+    const client = new CambiumClient(validConfig);
+    const server = (
+      client as unknown as { server: { simulateTransaction: jest.Mock } }
+    ).server;
+    server.simulateTransaction.mockResolvedValue({
+      transactionData: {
+        build: jest.fn().mockReturnValue('mock-soroban-data'),
+      },
+      minResourceFee: '100',
+      result: {
+        retval: StellarSdk.nativeToScVal(
+          {
+            threshold: 2,
+            signers: ['GABC...', 'GDEF...', 'GHIJ...'],
+            timelock_secs: 86400n,
+          },
+          { type: 'contract' },
+        ),
+      },
+    });
+
+    const config = await client.registry.getGovernance();
+    expect(config.threshold).toBe(2);
+    expect(config.signers).toHaveLength(3);
+    expect(config.signers[0]).toBe('GABC...');
+    expect(config.timelockSecs).toBe(86400);
+  });
+
+  test('getVkey parses verifying key state', async () => {
+    const client = new CambiumClient(validConfig);
+    const server = (
+      client as unknown as { server: { simulateTransaction: jest.Mock } }
+    ).server;
+    server.simulateTransaction.mockResolvedValue({
+      transactionData: {
+        build: jest.fn().mockReturnValue('mock-soroban-data'),
+      },
+      minResourceFee: '100',
+      result: {
+        retval: StellarSdk.nativeToScVal(
+          {
+            version: 3,
+            key: Buffer.from('66'.repeat(32), 'hex'),
+          },
+          { type: 'contract' },
+        ),
+      },
+    });
+
+    const vkey = await client.registry.getVkey('VM0007');
+    expect(vkey.version).toBe(3);
+    expect(vkey.key).toBe('66'.repeat(32));
+  });
+
+  test('proposeVkeyUpdate builds transaction successfully', async () => {
+    const client = new CambiumClient(validConfig);
+    const tx = await client.registry.proposeVkeyUpdate({
+      signer: 'GABC...',
+      methodology: 'VM0007',
+      newKey: '77'.repeat(32),
+    });
+    expect(tx).toBeDefined();
+  });
+
+  test('approveVkeyUpdate builds transaction successfully', async () => {
+    const client = new CambiumClient(validConfig);
+    const tx = await client.registry.approveVkeyUpdate({
+      signer: 'GDEF...',
+      proposalId: '88'.repeat(32),
+    });
+    expect(tx).toBeDefined();
+  });
+
+  test('executeVkeyUpdate builds transaction successfully', async () => {
+    const client = new CambiumClient(validConfig);
+    const tx = await client.registry.executeVkeyUpdate(
+      '88'.repeat(32),
+      'GABC...',
+    );
+    expect(tx).toBeDefined();
+  });
 });
 
 describe('RetirementModule', () => {
