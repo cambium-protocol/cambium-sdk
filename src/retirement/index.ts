@@ -4,10 +4,8 @@
  * Maps to the `retirement` Soroban contract:
  * - retire(params) -> Transaction (unsigned)
  * - getRetirement(id) -> RetirementRecord
- * - listRetirements(filter?) -> RetirementRecord[]
- *
- * Shielded retirement (shield: true) is not yet supported by the contract.
- * The SDK surfaces a clear typed error rather than silently succeeding.
+ * - listRetirements(filter?) -> RetirementRecord[] (event-based)
+ * - getRetirementEvents(opts?) -> RetireEvent[] (typed events API)
  */
 
 import * as StellarSdk from '@stellar/stellar-sdk';
@@ -19,6 +17,7 @@ import {
   RetireeRef,
 } from '../types';
 import { ConfigError } from '../errors';
+import { parseRetireEvent, retirementRecordId, RetireEvent } from '../events';
 import {
   asAmount,
   asBytes,
@@ -101,20 +100,70 @@ export class RetirementModule {
   /**
    * List retirement records matching an optional filter.
    *
-   * Note: Soroban contracts don't support iteration over storage — this method
-   * currently returns records that can be looked up. In production this would
-   * use an event indexer or off-chain indexer. For now, returns at most one
-   * record if a specific projectId is provided (used as a known ID lookup).
+   * Soroban storage does not support iteration, so this method reconstructs
+   * the list from `retire` events (see `getRetirementEvents`). The contract
+   * derives each record id as keccak256(project_id, vintage_year, amount,
+   * ledger_sequence) and records `retired_at` as the ledger sequence, so the
+   * returned records round-trip exactly with `getRetirement(id)`.
    *
-   * @param filter - Optional filter criteria
+   * Events are only fetched for a recent ledger window (the latest 50,000
+   * ledgers by default); for full historical listing, pass `startLedger` to
+   * `getRetirementEvents` and index off-chain.
+   *
+   * @param filter - Optional filter (projectId, public retiree address)
    */
   async listRetirements(
-    filter?: RetirementFilter,
+    filter: RetirementFilter = {},
   ): Promise<RetirementRecord[]> {
-    // Soroban storage doesn't support iteration — in production this would
-    // use an event index or off-chain indexer. For now, return empty.
-    // TODO: implement via event indexing or off-chain indexer
-    return [];
+    const events = await this.getRetirementEvents();
+    let records = events.map((event) => ({
+      id: retirementRecordId(
+        event.projectId,
+        event.vintageYear,
+        event.amount,
+        event.ledger,
+      ),
+      projectId: event.projectId,
+      vintageYear: event.vintageYear,
+      amount: event.amount,
+      retiredAt: event.ledger,
+      retiree: event.retiree,
+    }));
+
+    if (filter.projectId) {
+      records = records.filter((r) => r.projectId === filter.projectId);
+    }
+    if (filter.retiree) {
+      records = records.filter(
+        (r) =>
+          r.retiree.type === 'public' &&
+          r.retiree.address === filter.retiree,
+      );
+    }
+
+    return records;
+  }
+
+  /**
+   * Fetch and decode raw `retire` events emitted by the retirement contract.
+   *
+   * Each event carries everything needed to reconstruct the retirement
+   * (project, vintage, amount, retiree, ledger). This is the on-chain
+   * event-based view; pair it with `listRetirements` for record-shaped
+   * results.
+   *
+   * @param opts - Ledger range and pagination options for the RPC query
+   */
+  async getRetirementEvents(opts?: {
+    startLedger?: number;
+    limit?: number;
+  }): Promise<RetireEvent[]> {
+    const events = await this.client.getContractEvents(
+      this.contractId,
+      'retire',
+      opts,
+    );
+    return events.map(parseRetireEvent);
   }
 
   // -- Parsers --

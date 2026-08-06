@@ -4,6 +4,7 @@
 
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { CambiumClient } from '../../src/client';
+import { retirementRecordId } from '../../src/events';
 import {
   ConfigError,
   ContractError,
@@ -47,6 +48,7 @@ jest.mock('@stellar/stellar-sdk', () => {
       hash: 'abc123',
     }),
     getTransaction: jest.fn().mockResolvedValue({ status: 'SUCCESS' }),
+    getEvents: jest.fn().mockResolvedValue({ events: [] }),
   };
 
   return {
@@ -412,6 +414,14 @@ describe('RetirementModule', () => {
     },
   };
 
+  const retirementServer = () => {
+    const client = new CambiumClient(validConfig);
+    return client.server as unknown as {
+      simulateTransaction: jest.Mock;
+      getEvents: jest.Mock;
+    };
+  };
+
   test('retire (public) builds transaction successfully', async () => {
     const client = new CambiumClient(validConfig);
     const tx = await client.retirement.retire({
@@ -505,5 +515,114 @@ describe('RetirementModule', () => {
     const client = new CambiumClient(validConfig);
     const records = await client.retirement.listRetirements();
     expect(Array.isArray(records)).toBe(true);
+  });
+
+  test('listRetirements reconstructs records from retire events', async () => {
+    const event = {
+      type: 'contract',
+      ledger: 12345,
+      ledgerClosedAt: '2026-08-06T00:00:00Z',
+      contractId: 'C...RETIREMENT',
+      id: 'event-1',
+      pagingToken: 'pt-1',
+      topic: [
+        StellarSdk.nativeToScVal('retire', { type: 'symbol' }),
+        StellarSdk.nativeToScVal(Buffer.from('33'.repeat(32), 'hex'), {
+          type: 'bytes',
+        }),
+        StellarSdk.nativeToScVal(['Public', 'GABC...']),
+      ],
+      value: StellarSdk.nativeToScVal([
+          StellarSdk.nativeToScVal(2025, { type: 'u32' }),
+          StellarSdk.nativeToScVal(100n, { type: 'i128' }),
+        ]),
+    };
+    retirementServer().getEvents.mockResolvedValue({ events: [event] });
+
+    const client = new CambiumClient(validConfig);
+    const records = await client.retirement.listRetirements();
+    expect(records).toHaveLength(1);
+    expect(records[0].projectId).toBe('33'.repeat(32));
+    expect(records[0].vintageYear).toBe(2025);
+    expect(records[0].amount).toBe('100');
+    expect(records[0].retiredAt).toBe(12345);
+    expect(records[0].retiree).toEqual({ type: 'public', address: 'GABC...' });
+  });
+
+  test('listRetirements filters records by projectId', async () => {
+    const event = {
+      type: 'contract',
+      ledger: 12345,
+      ledgerClosedAt: '2026-08-06T00:00:00Z',
+      contractId: 'C...RETIREMENT',
+      id: 'event-1',
+      pagingToken: 'pt-1',
+      topic: [
+        StellarSdk.nativeToScVal('retire', { type: 'symbol' }),
+        StellarSdk.nativeToScVal(Buffer.from('33'.repeat(32), 'hex'), {
+          type: 'bytes',
+        }),
+        StellarSdk.nativeToScVal(['Public', 'GABC...']),
+      ],
+      value: StellarSdk.nativeToScVal([
+          StellarSdk.nativeToScVal(2025, { type: 'u32' }),
+          StellarSdk.nativeToScVal(100n, { type: 'i128' }),
+        ]),
+    };
+    retirementServer().getEvents.mockResolvedValue({ events: [event] });
+
+    const client = new CambiumClient(validConfig);
+    const matched = await client.retirement.listRetirements({
+      projectId: '33'.repeat(32),
+    });
+    expect(matched).toHaveLength(1);
+
+    const missed = await client.retirement.listRetirements({
+      projectId: '44'.repeat(32),
+    });
+    expect(missed).toHaveLength(0);
+  });
+
+  test('getRetirementEvents parses a shielded retiree', async () => {
+    const event = {
+      type: 'contract',
+      ledger: 12345,
+      ledgerClosedAt: '2026-08-06T00:00:00Z',
+      contractId: 'C...RETIREMENT',
+      id: 'event-2',
+      pagingToken: 'pt-2',
+      topic: [
+        StellarSdk.nativeToScVal('retire', { type: 'symbol' }),
+        StellarSdk.nativeToScVal(Buffer.from('33'.repeat(32), 'hex'), {
+          type: 'bytes',
+        }),
+        StellarSdk.nativeToScVal([
+          StellarSdk.nativeToScVal('Shielded', { type: 'symbol' }),
+          StellarSdk.nativeToScVal(Buffer.from('99'.repeat(32), 'hex'), {
+            type: 'bytes',
+          }),
+        ]),
+      ],
+      value: StellarSdk.nativeToScVal([
+          StellarSdk.nativeToScVal(2024, { type: 'u32' }),
+          StellarSdk.nativeToScVal(50n, { type: 'i128' }),
+        ]),
+    };
+    retirementServer().getEvents.mockResolvedValue({ events: [event] });
+
+    const client = new CambiumClient(validConfig);
+    const [parsed] = await client.retirement.getRetirementEvents();
+    expect(parsed.projectId).toBe('33'.repeat(32));
+    expect(parsed.retiree).toEqual({
+      type: 'shielded',
+      nullifierHash: '99'.repeat(32),
+    });
+    expect(parsed.amount).toBe('50');
+  });
+
+  test('retirementRecordId matches the on-chain derivation', () => {
+    const id = retirementRecordId('33'.repeat(32), 2025, '100', 12345);
+    expect(id).toMatch(/^[0-9a-f]{64}$/);
+    expect(retirementRecordId('33'.repeat(32), 2025, '100', 12345)).toBe(id);
   });
 });

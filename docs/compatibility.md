@@ -43,7 +43,20 @@ The SDK connects to a Soroban RPC node. Compatible endpoints:
 | Futurenet| `https://soroban-futurenet.stellar.org`      |
 | Mainnet  | `https://soroban-mainnet.stellar.org` (TBD)  |
 
-Ensure your RPC node supports the Soroban `simulateTransaction` and `sendTransaction` endpoints.
+Ensure your RPC node supports the Soroban `simulateTransaction`,
+`sendTransaction`, and `getEvents` endpoints. `getEvents` is required by
+`listRetirements` and `getRetirementEvents`, which reconstruct retirement
+records from on-chain events.
+
+## Event-Based Listings
+
+`listRetirements` queries the `retire` event topic from the retirement
+contract and rebuilds each record locally. The on-chain record id is
+`keccak256(project_id || vintage_year_be || amount_be || ledger_sequence_be)`
+and `retired_at` is the ledger sequence, so the rebuilt records match
+`getRetirement(id)` exactly. This uses `js-sha3` (keccak-256) and the RPC
+`getEvents` endpoint over the latest 50,000 ledgers by default; older history
+requires passing `startLedger` to `getRetirementEvents`.
 
 ## Contract Compatibility
 

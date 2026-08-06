@@ -200,7 +200,15 @@ marketplace to transfer the escrow token (e.g. via
 client.retirement.retire(params: RetireParams): Promise<Transaction>       // unsigned
 client.retirement.getRetirement(id: string): Promise<RetirementRecord>
 client.retirement.listRetirements(filter?: RetirementFilter): Promise<RetirementRecord[]>
+client.retirement.getRetirementEvents(opts?): Promise<RetireEvent[]>       // typed events API
 ```
+
+`listRetirements` reconstructs the records from `retire` contract events.
+Each record id is derived exactly as the contract derives it
+(`keccak256(project_id, vintage_year, amount, ledger)`), so event-listed
+records round-trip with `getRetirement(id)`. Events are queried from the
+latest 50,000 ledgers; pass `startLedger` to `getRetirementEvents` for older
+history.
 
 `RetireParams` accepts an optional `shield: boolean` flag corresponding to the shielded-retirement path described in the `contracts` and `zk-circuits` READMEs. When `shield: true`, a `nullifier` (32-byte hex commitment) is **required** and is the only identifying data recorded on-chain; the retiring address is never written. When `shield` is omitted or false, the retirement is public and `nullifier` is ignored.
 
@@ -330,7 +338,7 @@ This SDK follows semver, but note that **major version bumps track `contracts` i
 | Registry (write) | Working — `registerProject`, `requestMint`, governance `propose/approve/execute` build unsigned txs with correct ABI args |
 | Credits | Working — SEP-41 `balance`, `transfer`, `transfer_from`, `approve`, `allowance` plus `admin`, `get_burner`, `is_allowlisted` reads |
 | Marketplace | Working — `getPool`, `quote`, `swap`, `createPool`, `placeLimitOrder`, `cancelOrder`, `getOrder`, `getOrderBook` build correct ABI args and parse ScVal results |
-| Retirement | Working — `retire` public and shielded paths build correct ABI args; `shield: true` requires a caller-supplied `nullifier` |
+| Retirement | Working — `retire` public and shielded paths build correct ABI args; `listRetirements`/`getRetirementEvents` reconstructed from on-chain events |
 | Wallet integration | Working — `FreighterSigner` adapter shipped; `Signer` interface ready for other wallets |
 
 ---

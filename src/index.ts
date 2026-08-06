@@ -29,6 +29,9 @@ export { CreditsModule } from './credits';
 export { MarketplaceModule } from './marketplace';
 export { RetirementModule } from './retirement';
 
+// Events
+export { RetireEvent, parseRetireEvent, retirementRecordId } from './events';
+
 // Errors
 export {
   CambiumError,

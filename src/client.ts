@@ -251,4 +251,38 @@ export class CambiumClient {
     const signedXdr = await this.signer.signTransaction(tx.toXDR());
     return this.submit(signedXdr);
   }
+
+  /**
+   * Fetch raw contract events matching a topic prefix from the RPC server.
+   *
+   * Events are matched by the first topic element (the event name symbol),
+   * scoped to `contractId`.
+   *
+   * @param contractId - Contract that emitted the events
+   * @param topicPrefix - Event name (e.g. `'retire'`)
+   * @param opts - Ledger range and pagination options
+   * @returns The matching raw `ContractEvent`s
+   */
+  async getContractEvents(
+    contractId: string,
+    topicPrefix: string,
+    opts: { startLedger?: number; limit?: number } = {},
+  ): Promise<StellarSdk.SorobanRpc.Api.EventResponse[]> {
+    const latest = await this.getLedgerSequence();
+    const startLedger = Math.max(1, opts.startLedger ?? latest - 50_000);
+    const topic = StellarSdk.nativeToScVal(topicPrefix, { type: 'symbol' });
+
+    const response = await this._server.getEvents({
+      startLedger,
+      filters: [
+        {
+          contractIds: [contractId],
+          topics: [[topic.toXDR('base64')]],
+        },
+      ],
+      limit: opts.limit ?? 200,
+    });
+
+    return response.events ?? [];
+  }
 }
