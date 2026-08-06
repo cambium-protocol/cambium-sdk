@@ -8,6 +8,7 @@ import {
   ConfigError,
   ContractError,
   SimulationError,
+  TxTimeoutError,
 } from '../../src/errors';
 // Mock the StellarSdk module
 jest.mock('@stellar/stellar-sdk', () => {
@@ -45,6 +46,7 @@ jest.mock('@stellar/stellar-sdk', () => {
       status: 'SUCCESS',
       hash: 'abc123',
     }),
+    getTransaction: jest.fn().mockResolvedValue({ status: 'SUCCESS' }),
   };
 
   return {
@@ -77,6 +79,7 @@ jest.mock('@stellar/stellar-sdk', () => {
           }),
         })),
         fromXdr: jest.fn().mockReturnValue({}),
+        fromXDR: jest.fn().mockReturnValue({}),
       },
     ),
     TimeoutInfinite: 0,
@@ -104,8 +107,11 @@ describe('CambiumClient', () => {
 
   const mockServer = () => {
     const client = new CambiumClient(validConfig);
-    return (client as unknown as { server: { simulateTransaction: jest.Mock } })
-      .server;
+    return client.server as unknown as {
+      simulateTransaction: jest.Mock;
+      getTransaction: jest.Mock;
+      sendTransaction: jest.Mock;
+    };
   };
 
   const projectRetval = () =>
@@ -234,6 +240,57 @@ describe('CambiumClient', () => {
       .catch((e) => e);
     expect(err).toBeInstanceOf(ContractError);
     expect((err as ContractError).code).toBe(9);
+  });
+
+  test('waitForTransaction returns SUCCESS once the tx settles', async () => {
+    const getTransaction = mockServer().getTransaction as unknown as jest.Mock;
+    getTransaction
+      .mockResolvedValueOnce({ status: 'PENDING' })
+      .mockResolvedValueOnce({ status: 'PENDING' })
+      .mockResolvedValueOnce({ status: 'SUCCESS' });
+
+    const client = new CambiumClient(validConfig);
+    const status = await client.waitForTransaction('abc123', {
+      intervalMs: 1,
+      timeoutMs: 1000,
+    });
+    expect(status).toBe('SUCCESS');
+    expect(getTransaction).toHaveBeenCalledWith('abc123');
+  });
+
+  test('waitForTransaction throws TxTimeoutError when tx never settles', async () => {
+    mockServer().getTransaction.mockResolvedValue({ status: 'PENDING' });
+
+    const client = new CambiumClient(validConfig);
+    await expect(
+      client.waitForTransaction('abc123', {
+        intervalMs: 5,
+        timeoutMs: 20,
+      }),
+    ).rejects.toThrow(TxTimeoutError);
+  });
+
+  test('signAndSend throws ConfigError when no signer is configured', async () => {
+    const client = new CambiumClient(validConfig);
+    await expect(
+      client.signAndSend({} as never),
+    ).rejects.toThrow(ConfigError);
+  });
+
+  test('signAndSend signs with the configured signer and submits', async () => {
+    const mockSigner = {
+      getPublicKey: jest.fn().mockResolvedValue('GABC...'),
+      signTransaction: jest.fn().mockResolvedValue('signed-xdr'),
+    };
+
+    const client = new CambiumClient({ ...validConfig, signer: mockSigner });
+    const result = await client.signAndSend({
+      toXDR: jest.fn().mockReturnValue('mock-xdr'),
+    } as never);
+
+    expect(mockSigner.signTransaction).toHaveBeenCalledWith('mock-xdr');
+    expect(result.status).toBe('SUCCESS');
+    expect(result.hash).toBe('abc123');
   });
 });
 

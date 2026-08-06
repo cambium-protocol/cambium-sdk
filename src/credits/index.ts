@@ -15,7 +15,6 @@ import {
   TransferFromParams,
   TransferParams,
 } from '../types';
-import { ConfigError } from '../errors';
 import { asAmount, asBoolean, asOption, asString } from '../scval';
 
 export class CreditsModule {
@@ -171,18 +170,7 @@ export class CreditsModule {
     params: TransferParams,
   ): Promise<{ status: string; hash?: string }> {
     const tx = await this.transfer(params);
-
-    if (!this.client.signer) {
-      throw new ConfigError(
-        'transferAndSubmit requires a signer in the client config',
-      );
-    }
-
-    const signedXdr = await this.client.signer.signTransaction(
-      tx.toXDR(),
-    );
-
-    const result = await this.client.submit(signedXdr);
+    const result = await this.client.signAndSend(tx);
     return {
       status: result.status,
       hash: result.hash,

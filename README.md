@@ -99,7 +99,17 @@ const tx = await client.marketplace.swap({
 // Sign with your preferred wallet integration, then submit
 const signedTx = await myWallet.sign(tx);
 const result = await client.submit(signedTx);
-console.log(result.status);
+
+// Wait for the transaction to settle on-chain (SUCCESS | FAILED | NOT_FOUND)
+const finalStatus = await client.waitForTransaction(result.hash);
+console.log(result.status, finalStatus);
+```
+
+If a `signer` is configured on the client, signing and submission collapse
+into one call:
+
+```typescript
+const result = await client.signAndSend(tx); // requires signer in config
 ```
 
 ---

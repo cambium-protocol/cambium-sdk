@@ -14,7 +14,12 @@ import { RegistryModule } from './registry';
 import { CreditsModule } from './credits';
 import { MarketplaceModule } from './marketplace';
 import { RetirementModule } from './retirement';
-import { ConfigError, SimulationError, fromSimulationError } from './errors';
+import {
+  ConfigError,
+  SimulationError,
+  TxTimeoutError,
+  fromSimulationError,
+} from './errors';
 import { Signer } from './signers/types';
 
 export interface CambiumClientConfig {
@@ -22,6 +27,14 @@ export interface CambiumClientConfig {
   rpcUrl: string;
   contracts: ContractAddresses;
   signer?: Signer;
+}
+
+/** Options for polling a transaction's final status. */
+export interface TxPollOptions {
+  /** Poll interval in milliseconds (default 1000). */
+  intervalMs?: number;
+  /** Maximum time to wait in milliseconds (default 30000). */
+  timeoutMs?: number;
 }
 
 const NETWORK_PASSPHRASES: Record<Network, string> = {
@@ -180,5 +193,62 @@ export class CambiumClient {
     );
 
     return this._server.sendTransaction(transaction);
+  }
+
+  /**
+   * Poll for a submitted transaction's final status.
+   *
+   * Soroban RPC initially reports a transaction as `PENDING` (or `NOT_FOUND`
+   * until it is processed). This polls `getTransaction` until the status
+   * settles on `SUCCESS`/`FAILED` or the timeout elapses.
+   *
+   * @param hash - Transaction hash (hex string, as returned by `submit`)
+   * @param opts - Poll interval and timeout options
+   * @returns The final status: `'SUCCESS'` | `'FAILED'` | `'NOT_FOUND'`
+   * @throws {TxTimeoutError} if the transaction does not finalize in time
+   */
+  async waitForTransaction(
+    hash: string,
+    opts: TxPollOptions = {},
+  ): Promise<string> {
+    const intervalMs = opts.intervalMs ?? 1000;
+    const timeoutMs = opts.timeoutMs ?? 30_000;
+    const deadline = Date.now() + timeoutMs;
+
+    let status = 'PENDING';
+    while (Date.now() < deadline) {
+      const response = await this._server.getTransaction(hash);
+      status = response.status;
+      if (status !== 'PENDING' && status !== 'NOT_FOUND') {
+        return status;
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    throw new TxTimeoutError(hash, timeoutMs);
+  }
+
+  /**
+   * Sign a transaction with the configured signer and submit it.
+   *
+   * The `tx` is typically produced by a module write method (e.g.
+   * `client.registry.registerProject(...)`), which returns an unsigned
+   * transaction. Requires `signer` in the client config.
+   *
+   * @param tx - An unsigned transaction to sign and submit
+   * @returns The immediate send result from the RPC server
+   * @throws {ConfigError} if no signer is configured
+   */
+  async signAndSend(
+    tx: StellarSdk.Transaction,
+  ): Promise<StellarSdk.SorobanRpc.Api.SendTransactionResponse> {
+    if (!this.signer) {
+      throw new ConfigError(
+        'signAndSend requires a signer in the client config',
+      );
+    }
+
+    const signedXdr = await this.signer.signTransaction(tx.toXDR());
+    return this.submit(signedXdr);
   }
 }

@@ -80,6 +80,16 @@ export class ConfigError extends CambiumError {
   }
 }
 
+/** A submitted transaction did not reach a final status in time. */
+export class TxTimeoutError extends CambiumError {
+  constructor(hash: string, timeoutMs: number) {
+    super(
+      `Transaction ${hash} did not reach a final status within ${timeoutMs}ms`,
+    );
+    this.name = 'TxTimeoutError';
+  }
+}
+
 /**
  * A transaction simulation failed before reaching the network.
  *
