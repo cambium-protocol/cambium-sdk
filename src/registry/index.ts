@@ -11,7 +11,16 @@
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { CambiumClient } from '../client';
 import { Project, Vintage, ProjectFilter } from '../types';
-import { NotFoundError } from '../errors';
+import {
+  asAmount,
+  asBytes,
+  asNumber,
+  asOption,
+  asRecord,
+  asString,
+  idFromScVal,
+  idToScVal,
+} from '../scval';
 
 export class RegistryModule {
   private client: CambiumClient;
@@ -33,7 +42,7 @@ export class RegistryModule {
     const result = await this.client.invokeContract(
       this.contractId,
       'get_project',
-      [new StellarSdk.Address(projectId).toScVal()],
+      [idToScVal(projectId)],
     );
 
     return this.parseProject(result);
@@ -49,7 +58,7 @@ export class RegistryModule {
       this.contractId,
       'get_vintage',
       [
-        new StellarSdk.Address(projectId).toScVal(),
+        idToScVal(projectId),
         StellarSdk.nativeToScVal(year, { type: 'u32' }),
       ],
     );
@@ -59,14 +68,14 @@ export class RegistryModule {
 
   /**
    * List projects (read-only).
-   * Note: Soroban contracts don't have native list support — this is a
-   * convenience method that may need off-chain indexing in production.
-   * For now, returns a single project if found.
+   *
+   * Note: Soroban storage does not support iteration, and the registry
+   * contract does not emit a project-registration event, so an authoritative
+   * list cannot currently be reconstructed on-chain. In production this would
+   * be served by an off-chain indexer that observes `register_project` calls
+   * (or a future contract event).
    */
   async listProjects(_filter?: ProjectFilter): Promise<Project[]> {
-    // Soroban storage doesn't support iteration — in production this would
-    // use an event index or off-chain indexer. For now, return empty.
-    // TODO: implement via event indexing or off-chain indexer
     return [];
   }
 
@@ -82,7 +91,7 @@ export class RegistryModule {
     const args = [
       StellarSdk.nativeToScVal(
         {
-          id: new StellarSdk.Address(project.id),
+          id: idToScVal(project.id),
           methodology: StellarSdk.nativeToScVal(project.methodology, {
             type: 'symbol',
           }),
@@ -94,7 +103,7 @@ export class RegistryModule {
                 Buffer.from(project.externalRegistryRef),
                 { type: 'bytes' },
               )
-            : StellarSdk.nativeToScVal(null, { type: 'option' }),
+            : StellarSdk.nativeToScVal(null),
           verifying_key_version: StellarSdk.nativeToScVal(
             project.verifyingKeyVersion,
             { type: 'u32' },
@@ -114,7 +123,7 @@ export class RegistryModule {
 
   /**
    * Build an unsigned transaction to request a mint.
-   * @param projectId - The project ID
+   * @param projectId - The project ID (32-byte hex)
    * @param vintageYear - The vintage year
    * @param amount - Amount to mint (as string to avoid precision loss)
    * @param proof - The ZK proof data
@@ -128,7 +137,7 @@ export class RegistryModule {
     sourceAccount: string,
   ): Promise<StellarSdk.Transaction> {
     const args = [
-      new StellarSdk.Address(projectId).toScVal(),
+      idToScVal(projectId),
       StellarSdk.nativeToScVal(vintageYear, { type: 'u32' }),
       StellarSdk.nativeToScVal(amount, { type: 'i128' }),
       StellarSdk.nativeToScVal(
@@ -138,9 +147,7 @@ export class RegistryModule {
             { type: 'bytes' },
           ),
           public_inputs: StellarSdk.nativeToScVal(
-            proof.publicInputs.map((pi) =>
-              new StellarSdk.Address(pi).toScVal(),
-            ),
+            proof.publicInputs.map((pi) => idToScVal(pi)),
             { type: 'vec' },
           ),
         },
@@ -159,26 +166,25 @@ export class RegistryModule {
   // -- Parsers --
 
   private parseProject(value: unknown): Project {
-    // Placeholder parser — will be refined against actual XDR response shape
-    const obj = value as Record<string, unknown>;
+    const obj = asRecord(value);
     return {
-      id: String(obj.id || ''),
-      methodology: String(obj.methodology || ''),
-      geography: String(obj.geography || ''),
-      externalRegistryRef: obj.external_registry_ref
-        ? String(obj.external_registry_ref)
-        : undefined,
-      verifyingKeyVersion: Number(obj.verifying_key_version || 0),
+      id: idFromScVal(obj.id),
+      methodology: asString(obj.methodology),
+      geography: asString(obj.geography),
+      externalRegistryRef: asOption(obj.external_registry_ref, (v) =>
+        asBytes(v).toString('utf8'),
+      ),
+      verifyingKeyVersion: asNumber(obj.verifying_key_version),
     };
   }
 
   private parseVintage(value: unknown): Vintage {
-    const obj = value as Record<string, unknown>;
+    const obj = asRecord(value);
     return {
-      projectId: String(obj.project_id || ''),
-      year: Number(obj.year || 0),
-      totalIssued: String(obj.total_issued || '0'),
-      totalRetired: String(obj.total_retired || '0'),
+      projectId: idFromScVal(obj.project_id),
+      year: asNumber(obj.year),
+      totalIssued: asAmount(obj.total_issued),
+      totalRetired: asAmount(obj.total_retired),
     };
   }
 }

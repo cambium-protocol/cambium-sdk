@@ -12,6 +12,13 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 import { CambiumClient } from '../client';
 import { PoolState, Quote, SwapParams } from '../types';
 import { NotYetImplementedError, PoolNotFoundError } from '../errors';
+import {
+  asAmount,
+  asRecord,
+  asString,
+  idFromScVal,
+  idToScVal,
+} from '../scval';
 
 export class MarketplaceModule {
   private client: CambiumClient;
@@ -33,7 +40,7 @@ export class MarketplaceModule {
     const result = await this.client.invokeContract(
       this.contractId,
       'get_pool',
-      [new StellarSdk.Address(poolId).toScVal()],
+      [idToScVal(poolId)],
     );
 
     return this.parsePool(result);
@@ -79,7 +86,7 @@ export class MarketplaceModule {
    */
   async swap(params: SwapParams): Promise<StellarSdk.Transaction> {
     const args = [
-      new StellarSdk.Address(params.poolId).toScVal(),
+      idToScVal(params.poolId),
       StellarSdk.nativeToScVal(params.amountIn, { type: 'i128' }),
       StellarSdk.nativeToScVal(params.minAmountOut, { type: 'i128' }),
     ];
@@ -118,13 +125,13 @@ export class MarketplaceModule {
   // -- Parser --
 
   private parsePool(value: unknown): PoolState {
-    const obj = value as Record<string, unknown>;
+    const obj = asRecord(value);
     return {
-      id: String(obj.id || ''),
-      creditToken: String(obj.credit_token || ''),
-      pairedAsset: String(obj.paired_asset || ''),
-      creditReserves: String(obj.credit_reserves || '0'),
-      pairedReserves: String(obj.paired_reserves || '0'),
+      id: idFromScVal(obj.id),
+      creditToken: asString(obj.credit_token),
+      pairedAsset: asString(obj.paired_asset),
+      creditReserves: asAmount(obj.credit_reserves),
+      pairedReserves: asAmount(obj.paired_reserves),
     };
   }
 }

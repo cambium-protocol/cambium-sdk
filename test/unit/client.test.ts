@@ -13,6 +13,22 @@ import {
 
 // Mock the StellarSdk module
 jest.mock('@stellar/stellar-sdk', () => {
+  const real = jest.requireActual('@stellar/stellar-sdk');
+
+  const projectId = Buffer.from('11'.repeat(32), 'hex');
+  const defaultRetval = real.nativeToScVal(
+    {
+      id: projectId,
+      methodology: 'VM0007',
+      geography: 'BRA',
+      external_registry_ref: real.nativeToScVal(Buffer.from('VERRA:123'), {
+        type: 'bytes',
+      }),
+      verifying_key_version: 3,
+    },
+    { type: 'contract' },
+  );
+
   const mockServer = {
     getLatestLedger: jest.fn().mockResolvedValue({ sequence: 12345 }),
     getAccount: jest.fn().mockResolvedValue({
@@ -25,7 +41,7 @@ jest.mock('@stellar/stellar-sdk', () => {
         toXDR: jest.fn().mockReturnValue('mock-soroban-data'),
       },
       minResourceFee: '100',
-      result: { retval: { str: 'test-value' } },
+      result: { retval: defaultRetval },
     }),
     sendTransaction: jest.fn().mockResolvedValue({
       status: 'SUCCESS',
@@ -34,6 +50,7 @@ jest.mock('@stellar/stellar-sdk', () => {
   };
 
   return {
+    ...real,
     SorobanRpc: {
       Server: jest.fn().mockImplementation(() => mockServer),
       Api: {
@@ -64,7 +81,6 @@ jest.mock('@stellar/stellar-sdk', () => {
         fromXdr: jest.fn().mockReturnValue({}),
       },
     ),
-    nativeToScVal: jest.fn().mockReturnValue({}),
     TimeoutInfinite: 0,
     BASE_FEE: '100',
     Keypair: {
@@ -94,6 +110,21 @@ describe('CambiumClient', () => {
       .server;
   };
 
+  const projectRetval = () =>
+    StellarSdk.nativeToScVal(
+      {
+        id: Buffer.from('11'.repeat(32), 'hex'),
+        methodology: 'VM0007',
+        geography: 'BRA',
+        external_registry_ref: StellarSdk.nativeToScVal(
+          Buffer.from('VERRA:123'),
+          { type: 'bytes' },
+        ),
+        verifying_key_version: 3,
+      },
+      { type: 'contract' },
+    );
+
   afterEach(() => {
     (StellarSdk.SorobanRpc.Api.isSimulationError as unknown as jest.Mock).mockReturnValue(
       false,
@@ -104,7 +135,7 @@ describe('CambiumClient', () => {
         toXDR: jest.fn().mockReturnValue('mock-soroban-data'),
       },
       minResourceFee: '100',
-      result: { retval: { str: 'test-value' } },
+      result: { retval: projectRetval() },
     });
   });
 
@@ -156,7 +187,7 @@ describe('CambiumClient', () => {
     );
 
     const client = new CambiumClient(validConfig);
-    const err = await client.registry.getProject('test-id').catch((e) => e);
+    const err = await client.registry.getProject('11'.repeat(32)).catch((e) => e);
     expect(err).toBeInstanceOf(ContractError);
     expect((err as ContractError).code).toBe(4);
   });
@@ -170,7 +201,7 @@ describe('CambiumClient', () => {
     );
 
     const client = new CambiumClient(validConfig);
-    await expect(client.registry.getProject('test-id')).rejects.toThrow(
+    await expect(client.registry.getProject('11'.repeat(32))).rejects.toThrow(
       SimulationError,
     );
   });
@@ -220,11 +251,14 @@ describe('RegistryModule', () => {
     },
   };
 
-  test('getProject calls invokeContract correctly', async () => {
+  test('getProject parses ScVal project result', async () => {
     const client = new CambiumClient(validConfig);
-    // The mock returns a default value; in production this would parse XDR
-    const project = await client.registry.getProject('test-project-id');
-    expect(project).toBeDefined();
+    const project = await client.registry.getProject('11'.repeat(32));
+    expect(project.id).toBe('11'.repeat(32));
+    expect(project.methodology).toBe('VM0007');
+    expect(project.geography).toBe('BRA');
+    expect(project.externalRegistryRef).toBe('VERRA:123');
+    expect(project.verifyingKeyVersion).toBe(3);
   });
 });
 
@@ -271,7 +305,7 @@ describe('RetirementModule', () => {
     const client = new CambiumClient(validConfig);
     const tx = await client.retirement.retire({
       from: 'GABC...',
-      projectId: 'test-project',
+      projectId: '33'.repeat(32),
       vintageYear: 2025,
       amount: '100',
     });
@@ -283,7 +317,7 @@ describe('RetirementModule', () => {
     await expect(
       client.retirement.retire({
         from: 'GABC...',
-        projectId: 'test-project',
+        projectId: '33'.repeat(32),
         vintageYear: 2025,
         amount: '100',
         shield: true,
@@ -292,9 +326,41 @@ describe('RetirementModule', () => {
   });
 
   test('getRetirement calls invokeContract correctly', async () => {
+    const recordId = Buffer.from('22'.repeat(32), 'hex');
+    const recordRetval = StellarSdk.nativeToScVal(
+      {
+        id: recordId,
+        project_id: Buffer.from('33'.repeat(32), 'hex'),
+        vintage_year: 2025,
+        amount: 100n,
+        retired_at: 12345n,
+        retiree: {
+          Public: 'GABC...',
+        },
+      },
+      { type: 'contract' },
+    );
     const client = new CambiumClient(validConfig);
-    const record = await client.retirement.getRetirement('test-id');
-    expect(record).toBeDefined();
+    const server = (
+      client as unknown as { server: { simulateTransaction: jest.Mock } }
+    ).server;
+    server.simulateTransaction.mockResolvedValue({
+      transactionData: {
+        build: jest.fn().mockReturnValue('mock-soroban-data'),
+      },
+      minResourceFee: '100',
+      result: { retval: recordRetval },
+    });
+
+    const record = await client.retirement.getRetirement('22'.repeat(32));
+    expect(record.id).toBe('22'.repeat(32));
+    expect(record.projectId).toBe('33'.repeat(32));
+    expect(record.vintageYear).toBe(2025);
+    expect(record.amount).toBe('100');
+    expect(record.retiree).toEqual({
+      type: 'public',
+      address: 'GABC...',
+    });
   });
 
   test('listRetirements returns array', async () => {

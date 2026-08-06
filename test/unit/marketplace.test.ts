@@ -7,6 +7,20 @@ import { NotYetImplementedError } from '../../src/errors';
 
 // Mock the StellarSdk module
 jest.mock('@stellar/stellar-sdk', () => {
+  const real = jest.requireActual('@stellar/stellar-sdk');
+
+  const poolId = Buffer.from('44'.repeat(32), 'hex');
+  const poolRetval = real.nativeToScVal(
+    {
+      id: poolId,
+      credit_token: 'C...TOKEN',
+      paired_asset: 'XLM',
+      credit_reserves: 10000n,
+      paired_reserves: 20000n,
+    },
+    { type: 'contract' },
+  );
+
   const mockServer = {
     getLatestLedger: jest.fn().mockResolvedValue({ sequence: 12345 }),
     getAccount: jest.fn().mockResolvedValue({
@@ -19,15 +33,7 @@ jest.mock('@stellar/stellar-sdk', () => {
         toXDR: jest.fn().mockReturnValue('mock-soroban-data'),
       },
       minResourceFee: '100',
-      result: {
-        retval: {
-          id: 'pool-1',
-          credit_token: 'C...TOKEN',
-          paired_asset: 'C...PAIRED',
-          credit_reserves: '10000',
-          paired_reserves: '20000',
-        },
-      },
+      result: { retval: poolRetval },
     }),
     sendTransaction: jest.fn().mockResolvedValue({
       status: 'SUCCESS',
@@ -36,6 +42,7 @@ jest.mock('@stellar/stellar-sdk', () => {
   };
 
   return {
+    ...real,
     SorobanRpc: {
       Server: jest.fn().mockImplementation(() => mockServer),
       Api: {
@@ -65,7 +72,6 @@ jest.mock('@stellar/stellar-sdk', () => {
         fromXDR: jest.fn().mockReturnValue({}),
       },
     ),
-    nativeToScVal: jest.fn().mockReturnValue({}),
     TimeoutInfinite: 0,
     BASE_FEE: '100',
     Keypair: {
@@ -91,20 +97,23 @@ describe('MarketplaceModule', () => {
 
   test('getPool returns parsed pool state', async () => {
     const client = new CambiumClient(validConfig);
-    const pool = await client.marketplace.getPool('pool-1');
-    expect(pool).toBeDefined();
-    expect(pool.id).toBe('pool-1');
+    const poolId = '44'.repeat(32);
+    const pool = await client.marketplace.getPool(poolId);
+    expect(pool.id).toBe(poolId);
+    expect(pool.creditToken).toBe('C...TOKEN');
+    expect(pool.creditReserves).toBe('10000');
+    expect(pool.pairedReserves).toBe('20000');
   });
 
   test('quote calculates expected output using constant-product formula', async () => {
     const client = new CambiumClient(validConfig);
     const quote = await client.marketplace.quote({
-      poolId: 'pool-1',
+      poolId: '44'.repeat(32),
       amountIn: '1000',
     });
 
     expect(quote).toBeDefined();
-    expect(quote.poolId).toBe('pool-1');
+    expect(quote.poolId).toBe('44'.repeat(32));
     expect(quote.amountIn).toBe('1000');
     // With 10000 credit / 20000 paired reserves, swapping 1000 credits:
     // amountOut = (20000 * 1000) / (10000 + 1000) = 20000000 / 11000 ≈ 1818
@@ -114,7 +123,7 @@ describe('MarketplaceModule', () => {
   test('swap builds transaction successfully', async () => {
     const client = new CambiumClient(validConfig);
     const tx = await client.marketplace.swap({
-      poolId: 'pool-1',
+      poolId: '44'.repeat(32),
       amountIn: '1000',
       minAmountOut: '900',
       trader: 'GABC...',

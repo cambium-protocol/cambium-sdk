@@ -19,6 +19,16 @@ import {
   RetireeRef,
 } from '../types';
 import { NotYetImplementedError } from '../errors';
+import {
+  asAmount,
+  asBytes,
+  asNumber,
+  asRecord,
+  asString,
+  bytesToHex,
+  idFromScVal,
+  idToScVal,
+} from '../scval';
 
 export class RetirementModule {
   private client: CambiumClient;
@@ -51,7 +61,7 @@ export class RetirementModule {
 
     const args = [
       new StellarSdk.Address(params.from).toScVal(),
-      new StellarSdk.Address(params.projectId).toScVal(),
+      idToScVal(params.projectId),
       StellarSdk.nativeToScVal(params.vintageYear, { type: 'u32' }),
       StellarSdk.nativeToScVal(params.amount, { type: 'i128' }),
       StellarSdk.nativeToScVal(false, { type: 'bool' }),
@@ -73,7 +83,7 @@ export class RetirementModule {
     const result = await this.client.invokeContract(
       this.contractId,
       'get_retirement',
-      [new StellarSdk.Address(id).toScVal()],
+      [idToScVal(id)],
     );
 
     return this.parseRecord(result);
@@ -101,32 +111,30 @@ export class RetirementModule {
   // -- Parsers --
 
   private parseRecord(value: unknown): RetirementRecord {
-    const obj = value as Record<string, unknown>;
-    const retireeRaw = obj.retiree as Record<string, unknown> | undefined;
+    const obj = asRecord(value);
+    const retireeRaw = asRecord(obj.retiree);
 
     let retiree: RetireeRef;
-    if (retireeRaw && 'Public' in retireeRaw) {
+    if (retireeRaw.Public !== undefined) {
       retiree = {
         type: 'public',
-        address: String((retireeRaw.Public as Record<string, unknown>)._0 || ''),
+        address: asString(retireeRaw.Public),
       };
-    } else if (retireeRaw && 'Shielded' in retireeRaw) {
+    } else if (retireeRaw.Shielded !== undefined) {
       retiree = {
         type: 'shielded',
-        nullifierHash: String(
-          (retireeRaw.Shielded as Record<string, unknown>)._0 || '',
-        ),
+        nullifierHash: bytesToHex(asBytes(retireeRaw.Shielded)),
       };
     } else {
       retiree = { type: 'public', address: '' };
     }
 
     return {
-      id: String(obj.id || ''),
-      projectId: String(obj.project_id || ''),
-      vintageYear: Number(obj.vintage_year || 0),
-      amount: String(obj.amount || '0'),
-      retiredAt: Number(obj.retired_at || 0),
+      id: idFromScVal(obj.id),
+      projectId: idFromScVal(obj.project_id),
+      vintageYear: asNumber(obj.vintage_year),
+      amount: asAmount(obj.amount),
+      retiredAt: asNumber(obj.retired_at),
       retiree,
     };
   }

@@ -7,6 +7,8 @@ import { ConfigError } from '../../src/errors';
 
 // Mock the StellarSdk module
 jest.mock('@stellar/stellar-sdk', () => {
+  const real = jest.requireActual('@stellar/stellar-sdk');
+
   const mockServer = {
     getLatestLedger: jest.fn().mockResolvedValue({ sequence: 12345 }),
     getAccount: jest.fn().mockResolvedValue({
@@ -19,7 +21,7 @@ jest.mock('@stellar/stellar-sdk', () => {
         toXDR: jest.fn().mockReturnValue('mock-soroban-data'),
       },
       minResourceFee: '100',
-      result: { retval: '1000' },
+      result: { retval: real.nativeToScVal(1000n, { type: 'i128' }) },
     }),
     sendTransaction: jest.fn().mockResolvedValue({
       status: 'SUCCESS',
@@ -28,6 +30,7 @@ jest.mock('@stellar/stellar-sdk', () => {
   };
 
   return {
+    ...real,
     SorobanRpc: {
       Server: jest.fn().mockImplementation(() => mockServer),
       Api: {
@@ -57,7 +60,6 @@ jest.mock('@stellar/stellar-sdk', () => {
         fromXDR: jest.fn().mockReturnValue({}),
       },
     ),
-    nativeToScVal: jest.fn().mockReturnValue({}),
     TimeoutInfinite: 0,
     BASE_FEE: '100',
     Keypair: {

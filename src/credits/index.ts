@@ -10,6 +10,7 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 import { CambiumClient } from '../client';
 import { TransferParams } from '../types';
 import { ConfigError } from '../errors';
+import { asAmount } from '../scval';
 
 export class CreditsModule {
   private client: CambiumClient;
@@ -35,7 +36,7 @@ export class CreditsModule {
       [new StellarSdk.Address(address).toScVal()],
     );
 
-    return String(result);
+    return asAmount(result);
   }
 
   /**
