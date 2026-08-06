@@ -147,6 +147,19 @@ describe('MarketplaceModule', () => {
     expect(tx).toBeDefined();
   });
 
+  test('createPool builds transaction successfully', async () => {
+    const client = new CambiumClient(validConfig);
+    const tx = await client.marketplace.createPool({
+      poolId: '44'.repeat(32),
+      creditToken: 'C...TOKEN',
+      pairedAsset: 'XLM',
+      initialCredit: '1000',
+      initialPaired: '2000',
+      creator: 'GABC...',
+    });
+    expect(tx).toBeDefined();
+  });
+
   test('placeLimitOrder builds transaction successfully', async () => {
     const client = new CambiumClient(validConfig);
     const tx = await client.marketplace.placeLimitOrder({

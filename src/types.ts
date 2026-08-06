@@ -81,6 +81,22 @@ export interface SwapParams {
   trader: string;
 }
 
+/** Parameters for creating a liquidity pool. */
+export interface CreatePoolParams {
+  /** Unique pool identifier (32-byte hex). */
+  poolId: string;
+  /** Address of the credit token contract. */
+  creditToken: string;
+  /** Symbol of the paired asset (e.g. "XLM", "USDC"). */
+  pairedAsset: string;
+  /** Initial credit token liquidity (must be > 0). */
+  initialCredit: string;
+  /** Initial paired-asset liquidity (must be > 0). */
+  initialPaired: string;
+  /** Address creating the pool and providing initial liquidity. */
+  creator: string;
+}
+
 /** Side of a limit order. */
 export type OrderSide = 'buy' | 'sell';
 

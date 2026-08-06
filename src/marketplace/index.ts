@@ -14,6 +14,7 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 import { CambiumClient } from '../client';
 import {
   CancelOrderParams,
+  CreatePoolParams,
   Order,
   PlaceLimitOrderParams,
   PoolState,
@@ -56,6 +57,35 @@ export class MarketplaceModule {
     );
 
     return this.parsePool(result);
+  }
+
+  /**
+   * Build an unsigned transaction to create a new liquidity pool.
+   *
+   * The creator must provide initial liquidity for both sides of the pool.
+   * Tokens are transferred from the creator to the pool via
+   * approve + transfer_from, so the creator must approve the marketplace to
+   * spend both tokens before submitting this transaction.
+   *
+   * @param params - Pool parameters (poolId, creditToken, pairedAsset,
+   * initialCredit, initialPaired, creator)
+   * @returns An unsigned transaction that resolves to the created pool.
+   */
+  async createPool(params: CreatePoolParams): Promise<StellarSdk.Transaction> {
+    const args = [
+      idToScVal(params.poolId),
+      new StellarSdk.Address(params.creditToken).toScVal(),
+      StellarSdk.nativeToScVal(params.pairedAsset, { type: 'symbol' }),
+      StellarSdk.nativeToScVal(params.initialCredit, { type: 'i128' }),
+      StellarSdk.nativeToScVal(params.initialPaired, { type: 'i128' }),
+    ];
+
+    return this.client.buildTransaction(
+      this.contractId,
+      'create_pool',
+      args,
+      params.creator,
+    );
   }
 
   /**

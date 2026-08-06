@@ -155,6 +155,7 @@ client.credits.transferAndSubmit(params: TransferParams): Promise<TxResult> // r
 
 ```typescript
 client.marketplace.getPool(poolId: string): Promise<PoolState>
+client.marketplace.createPool(params: CreatePoolParams): Promise<Transaction>            // unsigned
 client.marketplace.quote(params: { poolId: string; amountIn: string }): Promise<Quote>  // read-only price estimate, no tx
 client.marketplace.swap(params: SwapParams): Promise<Transaction>                       // unsigned
 client.marketplace.placeLimitOrder(params: PlaceLimitOrderParams): Promise<Transaction> // unsigned
@@ -305,7 +306,7 @@ This SDK follows semver, but note that **major version bumps track `contracts` i
 | Registry (read) | Working — `getProject`, `getVintage` verified against testnet |
 | Registry (write) | Stub — `registerProject`, `requestMint` build unsigned txs, not yet tested end-to-end |
 | Credits | Working — `balanceOf`, `transfer` verified against testnet |
-| Marketplace | Working — `getPool`, `quote`, `swap`, `placeLimitOrder`, `cancelOrder`, `getOrder`, `getOrderBook` build correct ABI args and parse ScVal results |
+| Marketplace | Working — `getPool`, `quote`, `swap`, `createPool`, `placeLimitOrder`, `cancelOrder`, `getOrder`, `getOrderBook` build correct ABI args and parse ScVal results |
 | Retirement | Working — `retire` public and shielded paths build correct ABI args; `shield: true` requires a caller-supplied `nullifier` |
 | Wallet integration | Working — `FreighterSigner` adapter shipped; `Signer` interface ready for other wallets |
 
