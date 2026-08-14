@@ -43,6 +43,8 @@ export {
   PoolNotFoundError,
   NotYetImplementedError,
   ConfigError,
+  TxTimeoutError,
+  TxFailureError,
 } from './errors';
 
 // Signers

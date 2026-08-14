@@ -90,6 +90,21 @@ export class TxTimeoutError extends CambiumError {
   }
 }
 
+/** A submitted transaction was finalized by the network but failed. */
+export class TxFailureError extends CambiumError {
+  /** The on-chain transaction hash. */
+  public hash: string;
+  /** The final on-chain status (`FAILED`, or `NOT_FOUND` if it disappeared). */
+  public status: string;
+
+  constructor(hash: string, status: string) {
+    super(`Transaction ${hash} failed on-chain with status: ${status}`);
+    this.name = 'TxFailureError';
+    this.hash = hash;
+    this.status = status;
+  }
+}
+
 /**
  * A transaction simulation failed before reaching the network.
  *

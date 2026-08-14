@@ -3,6 +3,7 @@
  *
  * Maps to the `retirement` Soroban contract:
  * - retire(params) -> Transaction (unsigned)
+ * - retireAndSubmit(params) -> RetireResult (signed + settled + record)
  * - getRetirement(id) -> RetirementRecord
  * - listRetirements(filter?) -> RetirementRecord[] (event-based)
  * - getRetirementEvents(opts?) -> RetireEvent[] (typed events API)
@@ -15,8 +16,9 @@ import {
   RetirementRecord,
   RetirementFilter,
   RetireeRef,
+  RetireResult,
 } from '../types';
-import { ConfigError } from '../errors';
+import { ConfigError, TxFailureError } from '../errors';
 import { parseRetireEvent, retirementRecordId, RetireEvent } from '../events';
 import {
   asAmount,
@@ -95,6 +97,51 @@ export class RetirementModule {
     );
 
     return this.parseRecord(result);
+  }
+
+  /**
+   * Retire, submit, and return the on-chain retirement record in one call.
+   *
+   * Requires a `signer` in the client config. The transaction is signed,
+   * submitted, and polled to final status; on success the record is
+   * reconstructed from the settling ledger sequence (exactly as
+   * `listRetirements` does) and re-fetched so the caller gets a complete,
+   * verified `RetireResult` without hand-rolling the submit/wait/derive flow.
+   *
+   * @param params - Retirement parameters (same shape as `retire`)
+   * @returns The reconstructed retirement record plus the signed XDR
+   * @throws {ConfigError} if no signer is configured
+   * @throws {TxTimeoutError} if the transaction does not finalize in time
+   * @throws {TxFailureError} if the transaction fails on-chain
+   */
+  async retireAndSubmit(
+    params: RetireParams,
+  ): Promise<RetireResult> {
+    if (!this.client.signer) {
+      throw new ConfigError(
+        'retireAndSubmit requires a signer in the client config',
+      );
+    }
+
+    const tx = await this.retire(params);
+    const signedXdr = await this.client.signer.signTransaction(tx.toXDR());
+
+    const settled = await this.client.submitAndWait(signedXdr);
+    if (settled.status !== 'SUCCESS' || settled.ledger === undefined) {
+      throw new TxFailureError(settled.hash, settled.status);
+    }
+
+    const id = retirementRecordId(
+      params.projectId,
+      params.vintageYear,
+      params.amount,
+      settled.ledger,
+    );
+
+    return {
+      record: await this.getRetirement(id),
+      signedXdr,
+    };
   }
 
   /**
