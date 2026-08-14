@@ -152,6 +152,11 @@ export class RetirementModule {
    * event-based view; pair it with `listRetirements` for record-shaped
    * results.
    *
+   * Events are fetched across the whole ledger window (the latest 50,000
+   * ledgers, or `startLedger` if given) — the RPC call is paginated internally
+   * so all matching events are returned, not just the first page. `limit`
+   * caps the total number of events returned when set.
+   *
    * @param opts - Ledger range and pagination options for the RPC query
    */
   async getRetirementEvents(opts?: {

@@ -258,10 +258,17 @@ export class CambiumClient {
    * Events are matched by the first topic element (the event name symbol),
    * scoped to `contractId`.
    *
+   * Soroban RPC caps a single `getEvents` request at 200 results, so this
+   * method pages through the whole ledger window cursor-by-cursor until every
+   * matching event has been collected (or `limit` events are reached). This is
+   * what powers the on-chain event indexer (`listRetirements`,
+   * `getRetirementEvents`): without pagination only the first 200 events in
+   * the window would ever be visible.
+   *
    * @param contractId - Contract that emitted the events
    * @param topicPrefix - Event name (e.g. `'retire'`)
    * @param opts - Ledger range and pagination options
-   * @returns The matching raw `ContractEvent`s
+   * @returns The matching raw `ContractEvent`s, in ledger order
    */
   async getContractEvents(
     contractId: string,
@@ -272,17 +279,46 @@ export class CambiumClient {
     const startLedger = Math.max(1, opts.startLedger ?? latest - 50_000);
     const topic = StellarSdk.nativeToScVal(topicPrefix, { type: 'symbol' });
 
-    const response = await this._server.getEvents({
-      startLedger,
-      filters: [
-        {
-          contractIds: [contractId],
-          topics: [[topic.toXDR('base64')]],
-        },
-      ],
-      limit: opts.limit ?? 200,
-    });
+    const filters = [
+      {
+        contractIds: [contractId],
+        topics: [[topic.toXDR('base64')]],
+      },
+    ];
 
-    return response.events ?? [];
+    // Soroban RPC refuses limits above 200 events per request.
+    const pageSize = 200;
+    const maxEvents = opts.limit ?? Infinity;
+
+    const collected: StellarSdk.SorobanRpc.Api.EventResponse[] = [];
+    let cursor: string | undefined;
+
+    for (;;) {
+      const response = await this._server.getEvents({
+        startLedger,
+        cursor,
+        filters,
+        limit: pageSize,
+      });
+
+      const page = response.events ?? [];
+      collected.push(...page);
+
+      const wantMore =
+        collected.length < maxEvents && page.length >= pageSize;
+      if (!wantMore) break;
+
+      const last = page[page.length - 1];
+      if (!last.pagingToken || last.pagingToken === cursor) {
+        // No forward progress — avoid an infinite loop against a misbehaving
+        // RPC endpoint that keeps returning a full page at the same cursor.
+        break;
+      }
+      cursor = last.pagingToken;
+    }
+
+    return maxEvents === Infinity
+      ? collected
+      : collected.slice(0, maxEvents);
   }
 }
