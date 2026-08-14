@@ -32,6 +32,7 @@ import {
   idToScVal,
   sideToScVal,
 } from '../scval';
+import { assertValidAmount, assertValidId } from '../validation';
 
 export class MarketplaceModule {
   private client: CambiumClient;
@@ -72,6 +73,9 @@ export class MarketplaceModule {
    * @returns An unsigned transaction that resolves to the created pool.
    */
   async createPool(params: CreatePoolParams): Promise<StellarSdk.Transaction> {
+    assertValidId('poolId', params.poolId);
+    assertValidAmount('initialCredit', params.initialCredit);
+    assertValidAmount('initialPaired', params.initialPaired);
     const args = [
       idToScVal(params.poolId),
       new StellarSdk.Address(params.creditToken).toScVal(),
@@ -127,6 +131,9 @@ export class MarketplaceModule {
    * @param params - Swap parameters (poolId, amountIn, minAmountOut, trader)
    */
   async swap(params: SwapParams): Promise<StellarSdk.Transaction> {
+    assertValidId('poolId', params.poolId);
+    assertValidAmount('amountIn', params.amountIn);
+    assertValidAmount('minAmountOut', params.minAmountOut);
     const args = [
       idToScVal(params.poolId),
       StellarSdk.nativeToScVal(params.amountIn, { type: 'i128' }),
@@ -156,6 +163,9 @@ export class MarketplaceModule {
   async placeLimitOrder(
     params: PlaceLimitOrderParams,
   ): Promise<StellarSdk.Transaction> {
+    assertValidAmount('amount', params.amount);
+    assertValidAmount('price', params.price);
+    assertValidId('poolId', params.poolId);
     const args = [
       new StellarSdk.Address(params.trader).toScVal(),
       sideToScVal(params.side),
@@ -185,6 +195,7 @@ export class MarketplaceModule {
   async cancelOrder(
     params: CancelOrderParams,
   ): Promise<StellarSdk.Transaction> {
+    assertValidId('orderId', params.orderId);
     const args = [
       new StellarSdk.Address(params.trader).toScVal(),
       idToScVal(params.orderId),

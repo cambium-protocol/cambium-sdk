@@ -20,6 +20,7 @@ import {
 } from '../types';
 import { ConfigError, TxFailureError } from '../errors';
 import { parseRetireEvent, retirementRecordId, RetireEvent } from '../events';
+import { assertValidAmount, assertValidId, assertValidYear } from '../validation';
 import {
   asAmount,
   asBytes,
@@ -56,6 +57,10 @@ export class RetirementModule {
    * secret so the contract cannot link the retirement back to the caller.
    */
   async retire(params: RetireParams): Promise<StellarSdk.Transaction> {
+    assertValidAmount('amount', params.amount);
+    assertValidId('projectId', params.projectId);
+    assertValidYear('vintageYear', params.vintageYear);
+
     const shield = params.shield ?? false;
     const nullifier = params.nullifier ?? '00'.repeat(32);
 
@@ -66,6 +71,9 @@ export class RetirementModule {
     }
     if (shield && nullifier === '00'.repeat(32)) {
       throw new ConfigError('nullifier must be non-zero for shielded retirement');
+    }
+    if (shield) {
+      assertValidId('nullifier', nullifier);
     }
 
     const args = [

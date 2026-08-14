@@ -23,6 +23,7 @@ import {
   idFromScVal,
   idToScVal,
 } from '../scval';
+import { assertValidAmount, assertValidId, assertValidYear } from '../validation';
 
 export class RegistryModule {
   private client: CambiumClient;
@@ -90,6 +91,7 @@ export class RegistryModule {
     project: Project,
     sourceAccount: string,
   ): Promise<StellarSdk.Transaction> {
+    assertValidId('project.id', project.id);
     const args = [
       StellarSdk.nativeToScVal(
         {
@@ -138,6 +140,9 @@ export class RegistryModule {
     proof: { proofData: string; publicInputs: string[] },
     sourceAccount: string,
   ): Promise<StellarSdk.Transaction> {
+    assertValidId('projectId', projectId);
+    assertValidYear('vintageYear', vintageYear);
+    assertValidAmount('amount', amount);
     const args = [
       idToScVal(projectId),
       StellarSdk.nativeToScVal(vintageYear, { type: 'u32' }),
@@ -206,6 +211,7 @@ export class RegistryModule {
     methodology: string;
     newKey: string;
   }): Promise<StellarSdk.Transaction> {
+    assertValidId('newKey', params.newKey);
     const args = [
       new StellarSdk.Address(params.signer).toScVal(),
       StellarSdk.nativeToScVal(params.methodology, { type: 'symbol' }),
@@ -233,6 +239,7 @@ export class RegistryModule {
     signer: string;
     proposalId: string;
   }): Promise<StellarSdk.Transaction> {
+    assertValidId('proposalId', params.proposalId);
     const args = [
       new StellarSdk.Address(params.signer).toScVal(),
       idToScVal(params.proposalId),
@@ -259,6 +266,7 @@ export class RegistryModule {
     proposalId: string,
     sourceAccount: string,
   ): Promise<StellarSdk.Transaction> {
+    assertValidId('proposalId', proposalId);
     const args = [idToScVal(proposalId)];
 
     return this.client.buildTransaction(

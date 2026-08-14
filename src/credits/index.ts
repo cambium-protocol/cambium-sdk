@@ -16,6 +16,7 @@ import {
   TransferParams,
 } from '../types';
 import { asAmount, asBoolean, asNumber, asOption, asString } from '../scval';
+import { assertValidAmount } from '../validation';
 
 export class CreditsModule {
   private client: CambiumClient;
@@ -68,6 +69,7 @@ export class CreditsModule {
    * @param params - Approval parameters (from, spender, amount)
    */
   async approve(params: ApproveParams): Promise<StellarSdk.Transaction> {
+    assertValidAmount('amount', params.amount);
     const args = [
       new StellarSdk.Address(params.from).toScVal(),
       new StellarSdk.Address(params.spender).toScVal(),
@@ -90,6 +92,7 @@ export class CreditsModule {
   async transferFrom(
     params: TransferFromParams,
   ): Promise<StellarSdk.Transaction> {
+    assertValidAmount('amount', params.amount);
     const args = [
       new StellarSdk.Address(params.spender).toScVal(),
       new StellarSdk.Address(params.from).toScVal(),
@@ -111,6 +114,7 @@ export class CreditsModule {
    * @returns Unsigned transaction ready for signing
    */
   async transfer(params: TransferParams): Promise<StellarSdk.Transaction> {
+    assertValidAmount('amount', params.amount);
     const args = [
       new StellarSdk.Address(params.from).toScVal(),
       new StellarSdk.Address(params.to).toScVal(),
