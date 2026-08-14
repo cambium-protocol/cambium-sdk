@@ -4,7 +4,7 @@
  * Maps to the `credit-token` SEP-41 contract:
  * - balance(id) / allowance(owner, spender) -> reads
  * - transfer / transferFrom / approve -> Transactions (unsigned)
- * - admin / getBurner / isAllowlisted -> reads
+ * - name / symbol / decimals / admin / getBurner / isAllowlisted -> reads
  */
 
 import * as StellarSdk from '@stellar/stellar-sdk';
@@ -15,7 +15,7 @@ import {
   TransferFromParams,
   TransferParams,
 } from '../types';
-import { asAmount, asBoolean, asOption, asString } from '../scval';
+import { asAmount, asBoolean, asNumber, asOption, asString } from '../scval';
 
 export class CreditsModule {
   private client: CambiumClient;
@@ -123,6 +123,44 @@ export class CreditsModule {
       args,
       params.from,
     );
+  }
+
+  /**
+   * Get the token's name (SEP-41 `name`).
+   */
+  async name(): Promise<string> {
+    const result = await this.client.invokeContract(
+      this.contractId,
+      'name',
+      [],
+    );
+    return asString(result);
+  }
+
+  /**
+   * Get the token's symbol (SEP-41 `symbol`).
+   */
+  async symbol(): Promise<string> {
+    const result = await this.client.invokeContract(
+      this.contractId,
+      'symbol',
+      [],
+    );
+    return asString(result);
+  }
+
+  /**
+   * Get the number of decimals used to represent amounts on-chain
+   * (SEP-41 `decimals`). Combined with `name`/`symbol` this lets integrators
+   * render balances without hardcoding token metadata.
+   */
+  async decimals(): Promise<number> {
+    const result = await this.client.invokeContract(
+      this.contractId,
+      'decimals',
+      [],
+    );
+    return asNumber(result);
   }
 
   /**
