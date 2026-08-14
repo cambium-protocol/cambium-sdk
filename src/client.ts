@@ -16,7 +16,6 @@ import { MarketplaceModule } from './marketplace';
 import { RetirementModule } from './retirement';
 import {
   ConfigError,
-  SimulationError,
   TxTimeoutError,
   fromSimulationError,
 } from './errors';
@@ -343,19 +342,21 @@ export class CambiumClient {
       });
 
       const page = response.events ?? [];
+      const nextCursor =
+        page.length > 0 ? page[page.length - 1].pagingToken : undefined;
+
+      // A repeated cursor means the RPC endpoint is not advancing (misbehaving
+      // or exhausted) — stop before collecting the same page twice so we can
+      // never loop forever.
+      if (cursor !== undefined && nextCursor === cursor) break;
+
       collected.push(...page);
 
       const wantMore =
         collected.length < maxEvents && page.length >= pageSize;
       if (!wantMore) break;
 
-      const last = page[page.length - 1];
-      if (!last.pagingToken || last.pagingToken === cursor) {
-        // No forward progress — avoid an infinite loop against a misbehaving
-        // RPC endpoint that keeps returning a full page at the same cursor.
-        break;
-      }
-      cursor = last.pagingToken;
+      cursor = nextCursor;
     }
 
     return maxEvents === Infinity

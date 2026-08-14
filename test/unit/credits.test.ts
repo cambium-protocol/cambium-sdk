@@ -213,4 +213,63 @@ describe('CreditsModule', () => {
     expect(result.hash).toBe('abc123');
     expect(mockSigner.signTransaction).toHaveBeenCalledWith('mock-xdr');
   });
+
+  test('name returns the token name string', async () => {
+    const client = new CambiumClient(validConfig);
+    const server = (
+      client as unknown as { server: { simulateTransaction: jest.Mock } }
+    ).server;
+    server.simulateTransaction.mockResolvedValue({
+      transactionData: {
+        build: jest.fn().mockReturnValue('mock-soroban-data'),
+      },
+      minResourceFee: '100',
+      result: { retval: StellarSdk.nativeToScVal('Cambium', { type: 'symbol' }) },
+    });
+
+    expect(await client.credits.name()).toBe('Cambium');
+  });
+
+  test('symbol returns the token symbol string', async () => {
+    const client = new CambiumClient(validConfig);
+    const server = (
+      client as unknown as { server: { simulateTransaction: jest.Mock } }
+    ).server;
+    server.simulateTransaction.mockResolvedValue({
+      transactionData: {
+        build: jest.fn().mockReturnValue('mock-soroban-data'),
+      },
+      minResourceFee: '100',
+      result: { retval: StellarSdk.nativeToScVal('CAMB', { type: 'symbol' }) },
+    });
+
+    expect(await client.credits.symbol()).toBe('CAMB');
+  });
+
+  test('decimals returns the token decimals as a number', async () => {
+    const client = new CambiumClient(validConfig);
+    const server = (
+      client as unknown as { server: { simulateTransaction: jest.Mock } }
+    ).server;
+    server.simulateTransaction.mockResolvedValue({
+      transactionData: {
+        build: jest.fn().mockReturnValue('mock-soroban-data'),
+      },
+      minResourceFee: '100',
+      result: { retval: StellarSdk.nativeToScVal(7, { type: 'u32' }) },
+    });
+
+    expect(await client.credits.decimals()).toBe(7);
+  });
+
+  test('transfer rejects a negative amount before simulation', async () => {
+    const client = new CambiumClient(validConfig);
+    await expect(
+      client.credits.transfer({
+        from: 'GABC...',
+        to: 'GDEF...',
+        amount: '-5',
+      }),
+    ).rejects.toThrow(ConfigError);
+  });
 });

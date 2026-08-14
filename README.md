@@ -112,6 +112,13 @@ into one call:
 const result = await client.signAndSend(tx); // requires signer in config
 ```
 
+`submitAndWait` combines submit + polling and returns the settlement details
+(ledger sequence, close time, result XDR) once the transaction finalizes:
+
+```typescript
+const { hash, status, ledger } = await client.submitAndWait(signedTx);
+```
+
 ---
 
 ## Core concepts
@@ -165,6 +172,9 @@ client.registry.executeVkeyUpdate(proposalId: string, sourceAccount: string): Pr
 ```typescript
 client.credits.balanceOf(address: string): Promise<string>                // read
 client.credits.allowance(params: AllowanceParams): Promise<string>        // read
+client.credits.name(): Promise<string>                                    // read (SEP-41)
+client.credits.symbol(): Promise<string>                                  // read (SEP-41)
+client.credits.decimals(): Promise<number>                                // read (SEP-41)
 client.credits.admin(): Promise<string>                                   // read
 client.credits.getBurner(): Promise<string | undefined>                   // read
 client.credits.isAllowlisted(address: string): Promise<boolean>           // read
@@ -198,6 +208,7 @@ marketplace to transfer the escrow token (e.g. via
 
 ```typescript
 client.retirement.retire(params: RetireParams): Promise<Transaction>       // unsigned
+client.retirement.retireAndSubmit(params: RetireParams): Promise<RetireResult> // requires signer; settles + returns the on-chain record
 client.retirement.getRetirement(id: string): Promise<RetirementRecord>
 client.retirement.listRetirements(filter?: RetirementFilter): Promise<RetirementRecord[]>
 client.retirement.getRetirementEvents(opts?): Promise<RetireEvent[]>       // typed events API
@@ -206,9 +217,10 @@ client.retirement.getRetirementEvents(opts?): Promise<RetireEvent[]>       // ty
 `listRetirements` reconstructs the records from `retire` contract events.
 Each record id is derived exactly as the contract derives it
 (`keccak256(project_id, vintage_year, amount, ledger)`), so event-listed
-records round-trip with `getRetirement(id)`. Events are queried from the
-latest 50,000 ledgers; pass `startLedger` to `getRetirementEvents` for older
-history.
+records round-trip with `getRetirement(id)`. Events are fetched across the
+latest 50,000 ledgers and the RPC call is paginated internally, so *all*
+matching events are returned — pass `startLedger` to `getRetirementEvents`
+for older history and `limit` to cap the number of events fetched.
 
 `RetireParams` accepts an optional `shield: boolean` flag corresponding to the shielded-retirement path described in the `contracts` and `zk-circuits` READMEs. When `shield: true`, a `nullifier` (32-byte hex commitment) is **required** and is the only identifying data recorded on-chain; the retiring address is never written. When `shield` is omitted or false, the retirement is public and `nullifier` is ignored.
 
@@ -252,6 +264,10 @@ try {
     // handle specifically
   } else if (err instanceof ContractError) {
     console.error(err.code, err.message); // maps to on-chain error codes
+  } else if (err instanceof TxFailureError) {
+    console.error(err.hash, err.status); // tx finalized as FAILED
+  } else if (err instanceof ConfigError) {
+    // malformed input rejected before any network round-trip
   }
 }
 ```
@@ -335,19 +351,22 @@ This SDK follows semver, but note that **major version bumps track `contracts` i
 | Module | Status |
 |---|---|
 | Registry (read) | Working — `getProject`, `getVintage` verified against testnet |
-| Registry (write) | Working — `registerProject`, `requestMint`, governance `propose/approve/execute` build unsigned txs with correct ABI args |
-| Credits | Working — SEP-41 `balance`, `transfer`, `transfer_from`, `approve`, `allowance` plus `admin`, `get_burner`, `is_allowlisted` reads |
-| Marketplace | Working — `getPool`, `quote`, `swap`, `createPool`, `placeLimitOrder`, `cancelOrder`, `getOrder`, `getOrderBook` build correct ABI args and parse ScVal results |
-| Retirement | Working — `retire` public and shielded paths build correct ABI args; `listRetirements`/`getRetirementEvents` reconstructed from on-chain events |
+| Registry (write) | Working — `registerProject`, `requestMint`, governance `propose/approve/execute` build unsigned txs with correct ABI args; inputs validated locally |
+| Credits | Working — SEP-41 `balance`, `transfer`, `transfer_from`, `approve`, `allowance`, `name`, `symbol`, `decimals` plus `admin`, `get_burner`, `is_allowlisted` reads |
+| Marketplace | Working — `getPool`, `quote`, `swap`, `createPool`, `placeLimitOrder`, `cancelOrder`, `getOrder`, `getOrderBook` build correct ABI args and parse ScVal results; inputs validated locally |
+| Retirement | Working — `retire` public and shielded paths build correct ABI args; `listRetirements`/`getRetirementEvents` reconstruct records from on-chain events (fully paginated); `retireAndSubmit` settles and returns the on-chain record |
 | Wallet integration | Working — `FreighterSigner` adapter shipped; `Signer` interface ready for other wallets |
 
 ---
 
 ## Roadmap
 
-- [ ] Limit order book in marketplace (place, cancel, fill)
+- [x] Complete event listing — `listRetirements` / `getRetirementEvents` now
+      page through the full ledger window (RPC calls are paginated internally)
+- [ ] Off-chain event indexer for `listProjects` (Soroban storage doesn't
+      support iteration and the registry contract does not yet emit a
+      registration event)
 - [ ] Shielded retirement flow (requires `group_membership` ZK circuit + multi-contributor ceremony)
-- [ ] Off-chain event indexer for `listProjects` / `listRetirements` (Soroban storage doesn't support iteration)
 - [ ] React Native compatibility pass
 - [ ] Mainnet audit before mainnet deployment
 

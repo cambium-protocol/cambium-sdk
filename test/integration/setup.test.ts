@@ -42,6 +42,7 @@ describe('Integration: SDK against testnet', () => {
     try {
       addresses = loadDeployedAddresses();
     } catch (e) {
+      // eslint-disable-next-line no-console
       console.warn(
         'Skipping integration tests: could not load deployed addresses.',
         (e as Error).message,

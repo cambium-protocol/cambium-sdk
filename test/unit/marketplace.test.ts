@@ -3,6 +3,7 @@
  */
 
 import { CambiumClient } from '../../src/client';
+import { ConfigError } from '../../src/errors';
 import * as StellarSdk from '@stellar/stellar-sdk';
 
 // Mock the StellarSdk module
@@ -237,5 +238,45 @@ describe('MarketplaceModule', () => {
     const order = await client.marketplace.getOrder('55'.repeat(32));
     expect(order.id).toBe('55'.repeat(32));
     expect(order.side).toBe('buy');
+  });
+
+  test('swap rejects an ill-formed poolId before simulation', async () => {
+    const client = new CambiumClient(validConfig);
+    await expect(
+      client.marketplace.swap({
+        poolId: 'not-a-pool',
+        amountIn: '1000',
+        minAmountOut: '900',
+        trader: 'GABC...',
+      }),
+    ).rejects.toThrow(ConfigError);
+  });
+
+  test('createPool rejects a non-integer initialCredit before simulation', async () => {
+    const client = new CambiumClient(validConfig);
+    await expect(
+      client.marketplace.createPool({
+        poolId: '44'.repeat(32),
+        creditToken: 'C...TOKEN',
+        pairedAsset: 'XLM',
+        initialCredit: '1e3',
+        initialPaired: '2000',
+        creator: 'GABC...',
+      }),
+    ).rejects.toThrow(ConfigError);
+  });
+
+  test('placeLimitOrder rejects a non-integer price before simulation', async () => {
+    const client = new CambiumClient(validConfig);
+    await expect(
+      client.marketplace.placeLimitOrder({
+        trader: 'GABC...',
+        side: 'buy',
+        amount: '100',
+        price: '9.5',
+        poolId: '44'.repeat(32),
+        pairedToken: 'C...TOKEN',
+      }),
+    ).rejects.toThrow(ConfigError);
   });
 });

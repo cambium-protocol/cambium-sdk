@@ -16,6 +16,13 @@ const AMOUNT_RE = /^(0|[1-9]\d*)$/;
 /** Match a 32-byte identifier expressed as lowercase/uppercase hex. */
 const ID_RE = /^[0-9a-fA-F]{64}$/;
 
+/** Render a value in an error message without throwing on BigInt. */
+function describe(value: unknown): string {
+  if (typeof value === 'bigint') return `${value}n`;
+  if (typeof value === 'string') return JSON.stringify(value);
+  return String(value);
+}
+
 /**
  * Assert that `value` is a non-negative integer decimal string (as all on-chain
  * amounts are represented). Throws `ConfigError` otherwise.
@@ -23,7 +30,7 @@ const ID_RE = /^[0-9a-fA-F]{64}$/;
 export function assertValidAmount(name: string, value: unknown): asserts value is string {
   if (typeof value !== 'string' || !AMOUNT_RE.test(value)) {
     throw new ConfigError(
-      `${name} must be a non-negative integer string, received ${JSON.stringify(value)}`,
+      `${name} must be a non-negative integer string, received ${describe(value)}`,
     );
   }
 }
@@ -35,7 +42,7 @@ export function assertValidAmount(name: string, value: unknown): asserts value i
 export function assertValidId(name: string, value: unknown): asserts value is string {
   if (typeof value !== 'string' || !ID_RE.test(value)) {
     throw new ConfigError(
-      `${name} must be a 32-byte hex string, received ${JSON.stringify(value)}`,
+      `${name} must be a 32-byte hex string, received ${describe(value)}`,
     );
   }
 }
@@ -51,7 +58,7 @@ export function assertValidYear(name: string, value: unknown): asserts value is 
     value < 1
   ) {
     throw new ConfigError(
-      `${name} must be a positive integer year, received ${JSON.stringify(value)}`,
+      `${name} must be a positive integer year, received ${describe(value)}`,
     );
   }
 }

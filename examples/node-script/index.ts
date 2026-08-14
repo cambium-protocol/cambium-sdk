@@ -26,9 +26,11 @@ async function main() {
   console.log('Current ledger sequence:', sequence);
 
   console.log('Registry module:', typeof client.registry.getProject);
-  console.log('Credits module:', typeof client.credits.balanceOf);
+  console.log('Credits module:', typeof client.credits.balanceOf,
+    '/ metadata:', typeof client.credits.symbol, typeof client.credits.decimals);
   console.log('Marketplace module:', typeof client.marketplace.getPool);
-  console.log('Retirement module:', typeof client.retirement.retire);
+  console.log('Retirement module:', typeof client.retirement.retire,
+    '/ settled flow:', typeof client.retirement.retireAndSubmit);
 
   console.log('SDK initialized successfully against testnet.');
 }

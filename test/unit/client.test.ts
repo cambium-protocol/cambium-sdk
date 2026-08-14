@@ -9,6 +9,7 @@ import {
   ConfigError,
   ContractError,
   SimulationError,
+  TxFailureError,
   TxTimeoutError,
 } from '../../src/errors';
 // Mock the StellarSdk module
@@ -113,6 +114,7 @@ describe('CambiumClient', () => {
       simulateTransaction: jest.Mock;
       getTransaction: jest.Mock;
       sendTransaction: jest.Mock;
+      getEvents: jest.Mock;
     };
   };
 
@@ -143,6 +145,9 @@ describe('CambiumClient', () => {
       minResourceFee: '100',
       result: { retval: projectRetval() },
     });
+    const getEvents = mockServer().getEvents as unknown as jest.Mock;
+    getEvents.mockReset();
+    getEvents.mockResolvedValue({ events: [] });
   });
 
   test('creates client with valid config', () => {
@@ -293,6 +298,125 @@ describe('CambiumClient', () => {
     expect(mockSigner.signTransaction).toHaveBeenCalledWith('mock-xdr');
     expect(result.status).toBe('SUCCESS');
     expect(result.hash).toBe('abc123');
+  });
+
+  test('submitAndWait returns settlement details once the tx settles', async () => {
+    const server = mockServer();
+    server.getTransaction.mockResolvedValue({
+      status: 'SUCCESS',
+      ledger: 20000,
+      createdAt: 1700000000,
+      envelopeXdr: { toXDR: jest.fn().mockReturnValue('env-base64') },
+      resultXdr: { toXDR: jest.fn().mockReturnValue('result-base64') },
+    });
+
+    const client = new CambiumClient(validConfig);
+    const result = await client.submitAndWait('signed-xdr');
+
+    expect(result.hash).toBe('abc123');
+    expect(result.status).toBe('SUCCESS');
+    expect(result.ledger).toBe(20000);
+    expect(result.createdAt).toBe(1700000000);
+    expect(result.envelopeXdr).toBe('env-base64');
+    expect(result.resultXdr).toBe('result-base64');
+  });
+
+  test('getContractEvents paginates through a full ledger window', async () => {
+    const client = new CambiumClient(validConfig);
+    const server = (
+      client as unknown as { server: { getEvents: jest.Mock } }
+    ).server;
+
+    const makeEvent = (n: number) => ({
+      type: 'contract',
+      ledger: n,
+      ledgerClosedAt: '2026-08-06T00:00:00Z',
+      contractId: 'C...RETIREMENT',
+      id: `event-${n}`,
+      pagingToken: `pt-${n}`,
+      topic: [],
+      value: undefined,
+    });
+
+    // Two full pages of 200 plus a final short page = 450 events total.
+    const fullPage = Array.from({ length: 200 }, (_, i) => makeEvent(i));
+    const fullPage2 = Array.from({ length: 200 }, (_, i) => makeEvent(200 + i));
+    const partialPage = Array.from({ length: 50 }, (_, i) =>
+      makeEvent(400 + i),
+    );
+
+    server.getEvents
+      .mockResolvedValueOnce({ events: fullPage })
+      .mockResolvedValueOnce({ events: fullPage2 })
+      .mockResolvedValueOnce({ events: partialPage });
+
+    const events = await client.getContractEvents(
+      'C...RETIREMENT',
+      'retire',
+    );
+
+    expect(events).toHaveLength(450);
+    expect(server.getEvents).toHaveBeenCalledTimes(3);
+    expect(server.getEvents).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cursor: 'pt-399' }),
+    );
+  });
+
+  test('getContractEvents stops at an explicit limit', async () => {
+    const client = new CambiumClient(validConfig);
+    const server = (
+      client as unknown as { server: { getEvents: jest.Mock } }
+    ).server;
+
+    const makeEvent = (n: number) => ({
+      type: 'contract',
+      ledger: n,
+      ledgerClosedAt: '2026-08-06T00:00:00Z',
+      contractId: 'C...RETIREMENT',
+      id: `event-${n}`,
+      pagingToken: `pt-${n}`,
+      topic: [],
+      value: undefined,
+    });
+    const firstPage = Array.from({ length: 200 }, (_, i) => makeEvent(i));
+    const secondPage = Array.from({ length: 50 }, (_, i) => makeEvent(200 + i));
+    server.getEvents
+      .mockResolvedValueOnce({ events: firstPage })
+      .mockResolvedValueOnce({ events: secondPage });
+
+    const events = await client.getContractEvents('C...RETIREMENT', 'retire', {
+      limit: 250,
+    });
+
+    expect(events).toHaveLength(250);
+    expect(server.getEvents).toHaveBeenCalledTimes(2);
+  });
+
+  test('getContractEvents avoids an infinite loop on a non-advancing cursor', async () => {
+    const client = new CambiumClient(validConfig);
+    const server = (
+      client as unknown as { server: { getEvents: jest.Mock } }
+    ).server;
+
+    const stale = Array.from({ length: 200 }, (_, i) => ({
+      type: 'contract',
+      ledger: i,
+      ledgerClosedAt: '2026-08-06T00:00:00Z',
+      contractId: 'C...RETIREMENT',
+      id: `event-${i}`,
+      pagingToken: 'same-token',
+      topic: [],
+      value: undefined,
+    }));
+    server.getEvents.mockResolvedValue({ events: stale });
+
+    const events = await client.getContractEvents(
+      'C...RETIREMENT',
+      'retire',
+    );
+
+    expect(events).toHaveLength(200);
+    expect(server.getEvents).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -624,5 +748,137 @@ describe('RetirementModule', () => {
     const id = retirementRecordId('33'.repeat(32), 2025, '100', 12345);
     expect(id).toMatch(/^[0-9a-f]{64}$/);
     expect(retirementRecordId('33'.repeat(32), 2025, '100', 12345)).toBe(id);
+  });
+
+  test('retireAndSubmit requires a signer', async () => {
+    const client = new CambiumClient(validConfig);
+    await expect(
+      client.retirement.retireAndSubmit({
+        from: 'GABC...',
+        projectId: '33'.repeat(32),
+        vintageYear: 2025,
+        amount: '100',
+      }),
+    ).rejects.toThrow(ConfigError);
+  });
+
+  test('retireAndSubmit signs, settles, and returns the reconstructed record', async () => {
+    const mockSigner = {
+      getPublicKey: jest.fn().mockResolvedValue('GABC...'),
+      signTransaction: jest.fn().mockResolvedValue('signed-xdr'),
+    };
+
+    const client = new CambiumClient({ ...validConfig, signer: mockSigner });
+    const server = (
+      client as unknown as { server: { simulateTransaction: jest.Mock; getTransaction: jest.Mock } }
+    ).server;
+
+    const ledger = 12345;
+    const projectId = '33'.repeat(32);
+
+    const buildSim = {
+      transactionData: { build: jest.fn().mockReturnValue('mock-soroban-data') },
+      minResourceFee: '100',
+      result: { retval: null },
+    };
+    const recordId = retirementRecordId(projectId, 2025, '100', ledger);
+    const recordSim = {
+      transactionData: { build: jest.fn().mockReturnValue('mock-soroban-data') },
+      minResourceFee: '100',
+      result: {
+        retval: StellarSdk.nativeToScVal(
+          {
+            id: Buffer.from(recordId, 'hex'),
+            project_id: Buffer.from(projectId, 'hex'),
+            vintage_year: 2025,
+            amount: 100n,
+            retired_at: 12345n,
+            retiree: { Public: 'GABC...' },
+          },
+          { type: 'contract' },
+        ),
+      },
+    };
+    server.simulateTransaction
+      .mockResolvedValueOnce(buildSim)
+      .mockResolvedValueOnce(recordSim);
+    server.getTransaction.mockResolvedValue({
+      status: 'SUCCESS',
+      ledger,
+      createdAt: 1700000000,
+      envelopeXdr: { toXDR: jest.fn().mockReturnValue('env-base64') },
+      resultXdr: { toXDR: jest.fn().mockReturnValue('result-base64') },
+    });
+
+    const result = await client.retirement.retireAndSubmit({
+      from: 'GABC...',
+      projectId,
+      vintageYear: 2025,
+      amount: '100',
+    });
+
+    expect(result.signedXdr).toBe('signed-xdr');
+    expect(result.record.id).toBe(recordId);
+    expect(result.record.projectId).toBe(projectId);
+    expect(result.record.amount).toBe('100');
+    expect(result.record.retiredAt).toBe(12345);
+  });
+
+  test('retireAndSubmit throws TxFailureError when the tx fails on-chain', async () => {
+    const mockSigner = {
+      getPublicKey: jest.fn().mockResolvedValue('GABC...'),
+      signTransaction: jest.fn().mockResolvedValue('signed-xdr'),
+    };
+
+    const client = new CambiumClient({ ...validConfig, signer: mockSigner });
+    const server = (
+      client as unknown as { server: { simulateTransaction: jest.Mock; getTransaction: jest.Mock } }
+    ).server;
+
+    server.simulateTransaction.mockResolvedValueOnce({
+      transactionData: { build: jest.fn().mockReturnValue('mock-soroban-data') },
+      minResourceFee: '100',
+      result: { retval: null },
+    });
+    server.getTransaction.mockResolvedValue({
+      status: 'FAILED',
+      ledger: 12345,
+      createdAt: 1700000000,
+      envelopeXdr: { toXDR: jest.fn().mockReturnValue('env-base64') },
+      resultXdr: { toXDR: jest.fn().mockReturnValue('result-base64') },
+    });
+
+    await expect(
+      client.retirement.retireAndSubmit({
+        from: 'GABC...',
+        projectId: '33'.repeat(32),
+        vintageYear: 2025,
+        amount: '100',
+      }),
+    ).rejects.toThrow(TxFailureError);
+  });
+
+  test('retire rejects a non-integer amount before simulation', async () => {
+    const client = new CambiumClient(validConfig);
+    await expect(
+      client.retirement.retire({
+        from: 'GABC...',
+        projectId: '33'.repeat(32),
+        vintageYear: 2025,
+        amount: '100.5',
+      }),
+    ).rejects.toThrow(ConfigError);
+  });
+
+  test('retire rejects an ill-formed project id before simulation', async () => {
+    const client = new CambiumClient(validConfig);
+    await expect(
+      client.retirement.retire({
+        from: 'GABC...',
+        projectId: 'not-a-hex-id',
+        vintageYear: 2025,
+        amount: '100',
+      }),
+    ).rejects.toThrow(ConfigError);
   });
 });
