@@ -13,6 +13,9 @@ import { ConfigError } from './errors';
 /** Match a non-negative integer amount expressed as a decimal string. */
 const AMOUNT_RE = /^(0|[1-9]\d*)$/;
 
+/** Match a positive integer amount expressed as a decimal string. */
+const POSITIVE_AMOUNT_RE = /^[1-9]\d*$/;
+
 /** Match a 32-byte identifier expressed as lowercase/uppercase hex. */
 const ID_RE = /^[0-9a-fA-F]{64}$/;
 
@@ -31,6 +34,19 @@ export function assertValidAmount(name: string, value: unknown): asserts value i
   if (typeof value !== 'string' || !AMOUNT_RE.test(value)) {
     throw new ConfigError(
       `${name} must be a non-negative integer string, received ${describe(value)}`,
+    );
+  }
+}
+
+/**
+ * Assert that `value` is a positive integer decimal string (amounts that must
+ * be strictly greater than zero, e.g. swap inputs and pool liquidity). Throws
+ * `ConfigError` otherwise.
+ */
+export function assertPositiveAmount(name: string, value: unknown): asserts value is string {
+  if (typeof value !== 'string' || !POSITIVE_AMOUNT_RE.test(value)) {
+    throw new ConfigError(
+      `${name} must be a positive integer string, received ${describe(value)}`,
     );
   }
 }

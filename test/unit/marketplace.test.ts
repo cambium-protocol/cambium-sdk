@@ -137,6 +137,91 @@ describe('MarketplaceModule', () => {
     expect(BigInt(quote.amountOut)).toBeGreaterThan(0n);
   });
 
+  test('quote rejects an ill-formed poolId before simulation', async () => {
+    const client = new CambiumClient(validConfig);
+    await expect(
+      client.marketplace.quote({
+        poolId: 'not-a-pool',
+        amountIn: '100',
+      }),
+    ).rejects.toThrow(ConfigError);
+  });
+
+  test('quote rejects a non-positive amountIn before simulation', async () => {
+    const client = new CambiumClient(validConfig);
+    for (const bad of ['0', '-5', '1.5', '1e3', 'abc']) {
+      await expect(
+        client.marketplace.quote({
+          poolId: '44'.repeat(32),
+          amountIn: bad,
+        }),
+      ).rejects.toThrow(ConfigError);
+    }
+  });
+
+  test('quote rejects a pool with no liquidity', async () => {
+    const client = new CambiumClient(validConfig);
+    const server = (
+      client as unknown as { server: { simulateTransaction: jest.Mock } }
+    ).server;
+    server.simulateTransaction.mockResolvedValue({
+      transactionData: {
+        build: jest.fn().mockReturnValue('mock-soroban-data'),
+      },
+      minResourceFee: '100',
+      result: {
+        retval: StellarSdk.nativeToScVal(
+          {
+            id: Buffer.from('44'.repeat(32), 'hex'),
+            credit_token: 'C...TOKEN',
+            paired_asset: 'XLM',
+            credit_reserves: 0n,
+            paired_reserves: 0n,
+          },
+          { type: 'contract' },
+        ),
+      },
+    });
+
+    await expect(
+      client.marketplace.quote({
+        poolId: '44'.repeat(32),
+        amountIn: '100',
+      }),
+    ).rejects.toThrow(ConfigError);
+  });
+
+  test('quote reports 0% impact when the spot price rounds to zero', async () => {
+    const client = new CambiumClient(validConfig);
+    const server = (
+      client as unknown as { server: { simulateTransaction: jest.Mock } }
+    ).server;
+    server.simulateTransaction.mockResolvedValue({
+      transactionData: {
+        build: jest.fn().mockReturnValue('mock-soroban-data'),
+      },
+      minResourceFee: '100',
+      result: {
+        retval: StellarSdk.nativeToScVal(
+          {
+            id: Buffer.from('44'.repeat(32), 'hex'),
+            credit_token: 'C...TOKEN',
+            paired_asset: 'XLM',
+            credit_reserves: 1000000n,
+            paired_reserves: 1n,
+          },
+          { type: 'contract' },
+        ),
+      },
+    });
+
+    const quote = await client.marketplace.quote({
+      poolId: '44'.repeat(32),
+      amountIn: '1000',
+    });
+    expect(quote.priceImpact).toBe('0%');
+  });
+
   test('swap builds transaction successfully', async () => {
     const client = new CambiumClient(validConfig);
     const tx = await client.marketplace.swap({

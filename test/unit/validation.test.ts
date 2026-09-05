@@ -4,6 +4,7 @@
 
 import { ConfigError } from '../../src/errors';
 import {
+  assertPositiveAmount,
   assertValidAmount,
   assertValidId,
   assertValidYear,
@@ -40,6 +41,23 @@ describe('validation helpers', () => {
   test('assertValidAmount names the offending parameter', () => {
     expect(() => assertValidAmount('minAmountOut', 'x')).toThrow(
       'minAmountOut must be a non-negative integer string',
+    );
+  });
+
+  test('assertPositiveAmount accepts positive integer strings', () => {
+    expect(() => assertPositiveAmount('amountIn', '1')).not.toThrow();
+    expect(() => assertPositiveAmount('amountIn', '999')).not.toThrow();
+  });
+
+  test('assertPositiveAmount rejects zero, negatives, and non-amounts', () => {
+    for (const bad of ['0', '-1', '1.5', '1e3', 'abc', '', undefined, null, 5]) {
+      expect(() => assertPositiveAmount('amountIn', bad)).toThrow(ConfigError);
+    }
+  });
+
+  test('assertPositiveAmount names the offending parameter', () => {
+    expect(() => assertPositiveAmount('amountIn', '0')).toThrow(
+      'amountIn must be a positive integer string',
     );
   });
 

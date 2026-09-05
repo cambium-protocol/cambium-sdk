@@ -12,6 +12,7 @@
 
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { CambiumClient } from '../client';
+import { ConfigError } from '../errors';
 import {
   CancelOrderParams,
   CreatePoolParams,
@@ -32,7 +33,7 @@ import {
   idToScVal,
   sideToScVal,
 } from '../scval';
-import { assertValidAmount, assertValidId } from '../validation';
+import { assertPositiveAmount, assertValidAmount, assertValidId } from '../validation';
 
 export class MarketplaceModule {
   private client: CambiumClient;
@@ -100,23 +101,38 @@ export class MarketplaceModule {
    *
    * @param params - The swap parameters (poolId, amountIn)
    * @returns A Quote with expected output and price impact
+   * @throws {ConfigError} if the pool id is malformed, `amountIn` is not a
+   * positive integer string, or the pool has no liquidity
    */
   async quote(params: { poolId: string; amountIn: string }): Promise<Quote> {
+    assertValidId('poolId', params.poolId);
+    assertPositiveAmount('amountIn', params.amountIn);
+
     const pool = await this.getPool(params.poolId);
 
     const creditReserves = BigInt(pool.creditReserves);
     const pairedReserves = BigInt(pool.pairedReserves);
     const amountIn = BigInt(params.amountIn);
 
+    if (creditReserves <= 0n || pairedReserves <= 0n) {
+      throw new ConfigError(
+        `pool ${params.poolId} has no liquidity to quote against`,
+      );
+    }
+
     // Constant-product AMM: dy = (y * dx) / (x + dx)
     const amountOut =
       (pairedReserves * amountIn) / (creditReserves + amountIn);
 
-    // Price impact = (amountOut / amountIn) / (pairedReserves / creditReserves) - 1
-    const spotPrice = pairedReserves * 10000n / creditReserves;
-    const executionPrice = amountOut * 10000n / amountIn;
+    // Price impact = (amountOut / amountIn) / (pairedReserves / creditReserves) - 1.
+    // Both prices are scaled by 1e4; when the spot price rounds to zero the
+    // impact is not well-defined, so report 0%.
+    const spotPrice = (pairedReserves * 10000n) / creditReserves;
+    const executionPrice = (amountOut * 10000n) / amountIn;
     const priceImpact =
-      ((executionPrice - spotPrice) * 10000n) / spotPrice;
+      spotPrice > 0n
+        ? ((executionPrice - spotPrice) * 10000n) / spotPrice
+        : 0n;
 
     return {
       poolId: params.poolId,
