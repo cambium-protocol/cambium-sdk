@@ -211,7 +211,10 @@ describe('CreditsModule', () => {
 
     expect(result.status).toBe('SUCCESS');
     expect(result.hash).toBe('abc123');
-    expect(mockSigner.signTransaction).toHaveBeenCalledWith('mock-xdr');
+    expect(mockSigner.signTransaction).toHaveBeenCalledWith(
+      'mock-xdr',
+      'Test SDF Network ; September 2015',
+    );
   });
 
   test('name returns the token name string', async () => {

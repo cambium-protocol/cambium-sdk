@@ -7,11 +7,11 @@ The Cambium SDK is designed to keep key custody entirely out of the SDK. By defa
 ```ts
 export interface Signer {
   getPublicKey(): Promise<string>;
-  signTransaction(xdr: string): Promise<string>;
+  signTransaction(xdr: string, networkPassphrase?: string): Promise<string>;
 }
 ```
 
-Any object implementing this interface can be passed as a signer to `CambiumClient`.
+Any object implementing this interface can be passed as a signer to `CambiumClient`. The `networkPassphrase` argument is passed through from the client (its `networkPassphrase`), so wallet adapters embed the correct network hash in the signature; custom signers can ignore it.
 
 ## Using FreighterSigner
 

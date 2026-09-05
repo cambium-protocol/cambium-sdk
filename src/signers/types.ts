@@ -6,5 +6,14 @@
  */
 export interface Signer {
   getPublicKey(): Promise<string>;
-  signTransaction(xdr: string): Promise<string>;
+  /**
+   * Sign a transaction XDR.
+   *
+   * @param xdr - The unsigned transaction XDR string
+   * @param networkPassphrase - The Stellar network passphrase to sign for
+   * (e.g. the CambiumClient's `networkPassphrase`). Wallets embed the
+   * passphrase hash in the signature to prevent replay across networks, so
+   * omitting it can produce signatures that are rejected on submission.
+   */
+  signTransaction(xdr: string, networkPassphrase?: string): Promise<string>;
 }

@@ -288,7 +288,10 @@ export class CambiumClient {
       );
     }
 
-    const signedXdr = await this.signer.signTransaction(tx.toXDR());
+    const signedXdr = await this.signer.signTransaction(
+      tx.toXDR(),
+      this.networkPassphrase,
+    );
     return this.submit(signedXdr);
   }
 

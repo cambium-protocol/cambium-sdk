@@ -132,7 +132,10 @@ export class RetirementModule {
     }
 
     const tx = await this.retire(params);
-    const signedXdr = await this.client.signer.signTransaction(tx.toXDR());
+    const signedXdr = await this.client.signer.signTransaction(
+      tx.toXDR(),
+      this.client.networkPassphrase,
+    );
 
     const settled = await this.client.submitAndWait(signedXdr);
     if (settled.status !== 'SUCCESS' || settled.ledger === undefined) {

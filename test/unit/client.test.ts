@@ -295,7 +295,10 @@ describe('CambiumClient', () => {
       toXDR: jest.fn().mockReturnValue('mock-xdr'),
     } as never);
 
-    expect(mockSigner.signTransaction).toHaveBeenCalledWith('mock-xdr');
+    expect(mockSigner.signTransaction).toHaveBeenCalledWith(
+      'mock-xdr',
+      'Test SDF Network ; September 2015',
+    );
     expect(result.status).toBe('SUCCESS');
     expect(result.hash).toBe('abc123');
   });

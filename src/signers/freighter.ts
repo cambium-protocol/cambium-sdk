@@ -50,13 +50,20 @@ export class FreighterSigner implements Signer {
   /**
    * Sign a transaction XDR using the Freighter wallet.
    * @param xdr - The unsigned transaction XDR string
+   * @param networkPassphrase - The Stellar network passphrase to sign for.
+   * Freighter embeds the passphrase hash in the signature; passing the
+   * client's passphrase keeps it aligned with the network the transaction
+   * will be submitted to.
    * @returns The signed transaction XDR string
    */
-  async signTransaction(xdr: string): Promise<string> {
+  async signTransaction(
+    xdr: string,
+    networkPassphrase?: string,
+  ): Promise<string> {
     const api = await this.getApi();
     const { signTransaction: freighterSign } = api;
     const signedXdr = await freighterSign(xdr, {
-      networkPassphrase: undefined,
+      networkPassphrase,
     });
     return signedXdr;
   }
