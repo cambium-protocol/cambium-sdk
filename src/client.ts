@@ -184,12 +184,17 @@ export class CambiumClient {
 
   /**
    * Submit a signed transaction to the network.
+   *
+   * @param txOrXdr - A signed `Transaction` object, or its XDR string (as
+   * returned by a wallet's `signTransaction`).
    */
-  async submit(signedXdr: string): Promise<StellarSdk.SorobanRpc.Api.SendTransactionResponse> {
-    const transaction = StellarSdk.TransactionBuilder.fromXDR(
-      signedXdr,
-      this.networkPassphrase,
-    );
+  async submit(
+    txOrXdr: string | StellarSdk.Transaction,
+  ): Promise<StellarSdk.SorobanRpc.Api.SendTransactionResponse> {
+    const transaction =
+      typeof txOrXdr === 'string'
+        ? StellarSdk.TransactionBuilder.fromXDR(txOrXdr, this.networkPassphrase)
+        : txOrXdr;
 
     return this._server.sendTransaction(transaction);
   }
@@ -202,13 +207,14 @@ export class CambiumClient {
    * transaction reaches a final status. This is the recommended way to drive
    * write flows when you need to know the outcome before continuing.
    *
-   * @param signedXdr - The signed transaction XDR
+   * @param txOrXdr - A signed `Transaction` object, or its XDR string (as
+   * returned by a wallet's `signTransaction`).
    * @param opts - Poll interval and timeout options for `waitForTransaction`
    * @returns Settlement details keyed by transaction hash
    * @throws {TxTimeoutError} if the transaction does not finalize in time
    */
   async submitAndWait(
-    signedXdr: string,
+    txOrXdr: string | StellarSdk.Transaction,
     opts: TxPollOptions = {},
   ): Promise<{
     hash: string;
@@ -218,7 +224,7 @@ export class CambiumClient {
     envelopeXdr?: string;
     resultXdr?: string;
   }> {
-    const sent = await this.submit(signedXdr);
+    const sent = await this.submit(txOrXdr);
     const status = await this.waitForTransaction(sent.hash, opts);
 
     const details = await this._server.getTransaction(sent.hash);

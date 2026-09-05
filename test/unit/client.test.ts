@@ -303,6 +303,31 @@ describe('CambiumClient', () => {
     expect(result.hash).toBe('abc123');
   });
 
+  test('submit accepts a signed XDR string', async () => {
+    const client = new CambiumClient(validConfig);
+    const result = await client.submit('signed-xdr');
+
+    expect(StellarSdk.TransactionBuilder.fromXDR).toHaveBeenCalledWith(
+      'signed-xdr',
+      'Test SDF Network ; September 2015',
+    );
+    expect(result.status).toBe('SUCCESS');
+    expect(result.hash).toBe('abc123');
+  });
+
+  test('submit accepts a Transaction object directly', async () => {
+    const client = new CambiumClient(validConfig);
+    const server = (
+      client as unknown as { server: { sendTransaction: jest.Mock } }
+    ).server;
+    const tx = { hash: 'abc123' };
+
+    const result = await client.submit(tx as never);
+
+    expect(server.sendTransaction).toHaveBeenCalledWith(tx);
+    expect(result.status).toBe('SUCCESS');
+  });
+
   test('submitAndWait returns settlement details once the tx settles', async () => {
     const server = mockServer();
     server.getTransaction.mockResolvedValue({
@@ -322,6 +347,24 @@ describe('CambiumClient', () => {
     expect(result.createdAt).toBe(1700000000);
     expect(result.envelopeXdr).toBe('env-base64');
     expect(result.resultXdr).toBe('result-base64');
+  });
+
+  test('submitAndWait accepts a Transaction object', async () => {
+    const server = mockServer();
+    server.getTransaction.mockResolvedValue({
+      status: 'SUCCESS',
+      ledger: 20000,
+      createdAt: 1700000000,
+      envelopeXdr: { toXDR: jest.fn().mockReturnValue('env-base64') },
+      resultXdr: { toXDR: jest.fn().mockReturnValue('result-base64') },
+    });
+
+    const client = new CambiumClient(validConfig);
+    const tx = { hash: 'abc123' };
+    const result = await client.submitAndWait(tx as never);
+
+    expect(result.hash).toBe('abc123');
+    expect(result.status).toBe('SUCCESS');
   });
 
   test('getContractEvents paginates through a full ledger window', async () => {
