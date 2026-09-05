@@ -3,7 +3,7 @@
  */
 
 // Client
-export { CambiumClient, CambiumClientConfig } from './client';
+export { CambiumClient, CambiumClientConfig, TxPollOptions } from './client';
 
 // Types
 export {
@@ -11,12 +11,23 @@ export {
   ContractAddresses,
   Project,
   Vintage,
+  GovernanceConfig,
+  VkeyState,
   PoolState,
   Quote,
+  Order,
+  OrderSide,
+  Fill,
   RetirementRecord,
   RetireeRef,
   TransferParams,
+  TransferFromParams,
+  ApproveParams,
+  AllowanceParams,
   SwapParams,
+  CreatePoolParams,
+  CancelOrderParams,
+  PlaceLimitOrderParams,
   RetireParams,
   RetirementFilter,
   RetireResult,
@@ -45,6 +56,7 @@ export {
   ConfigError,
   TxTimeoutError,
   TxFailureError,
+  SimulationError,
 } from './errors';
 
 // Signers
