@@ -2,6 +2,7 @@
  * Unit tests for the CambiumClient and registry module.
  */
 
+import { mockStellarSdk } from '../helpers/mockStellarSdk';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { CambiumClient } from '../../src/client';
 import { retirementRecordId } from '../../src/events';
@@ -13,88 +14,24 @@ import {
   TxTimeoutError,
 } from '../../src/errors';
 // Mock the StellarSdk module
-jest.mock('@stellar/stellar-sdk', () => {
-  const real = jest.requireActual('@stellar/stellar-sdk');
-
-  const projectId = Buffer.from('11'.repeat(32), 'hex');
-  const defaultRetval = real.nativeToScVal(
-    {
-      id: projectId,
-      methodology: 'VM0007',
-      geography: 'BRA',
-      external_registry_ref: real.nativeToScVal(Buffer.from('VERRA:123'), {
-        type: 'bytes',
-      }),
-      verifying_key_version: 3,
-    },
-    { type: 'contract' },
-  );
-
-  const mockServer = {
-    getLatestLedger: jest.fn().mockResolvedValue({ sequence: 12345 }),
-    getAccount: jest.fn().mockResolvedValue({
-      accountId: 'GABC',
-      sequence: '0',
-    }),
-    simulateTransaction: jest.fn().mockResolvedValue({
-      transactionData: {
-        build: jest.fn().mockReturnValue('mock-soroban-data'),
-        toXDR: jest.fn().mockReturnValue('mock-soroban-data'),
-      },
-      minResourceFee: '100',
-      result: { retval: defaultRetval },
-    }),
-    sendTransaction: jest.fn().mockResolvedValue({
-      status: 'SUCCESS',
-      hash: 'abc123',
-    }),
-    getTransaction: jest.fn().mockResolvedValue({ status: 'SUCCESS' }),
-    getEvents: jest.fn().mockResolvedValue({ events: [] }),
-  };
-
-  return {
-    ...real,
-    SorobanRpc: {
-      Server: jest.fn().mockImplementation(() => mockServer),
-      Api: {
-        isSimulationError: jest.fn().mockReturnValue(false),
-      },
-    },
-    Contract: jest.fn().mockImplementation(() => ({
-      call: jest.fn().mockReturnValue({}),
-    })),
-    Address: jest.fn().mockImplementation((addr: string) => ({
-      toScVal: jest.fn().mockReturnValue({ address: addr }),
-    })),
-    TransactionBuilder: Object.assign(
-      jest.fn().mockImplementation(() => ({
-        addOperation: jest.fn().mockReturnThis(),
-        setTimeout: jest.fn().mockReturnThis(),
-        build: jest.fn().mockReturnValue({
-          toXDR: jest.fn().mockReturnValue('mock-xdr'),
-        }),
-      })),
-      {
-        cloneFrom: jest.fn().mockImplementation((_tx: unknown, opts: unknown) => ({
-          build: jest.fn().mockReturnValue({
-            toXDR: jest.fn().mockReturnValue('mock-xdr'),
-            sorobanData: (opts as { sorobanData?: string }).sorobanData,
-          }),
-        })),
-        fromXdr: jest.fn().mockReturnValue({}),
-        fromXDR: jest.fn().mockReturnValue({}),
-      },
-    ),
-    TimeoutInfinite: 0,
-    BASE_FEE: '100',
-    Keypair: {
-      random: jest.fn().mockReturnValue({
-        publicKey: jest.fn().mockReturnValue('GDEF...'),
-      }),
-    },
-    Account: jest.fn(),
-  };
-});
+jest.mock('@stellar/stellar-sdk', () =>
+  mockStellarSdk({
+    retvalBuilder: (real) =>
+      real.nativeToScVal(
+        {
+          id: Buffer.from('11'.repeat(32), 'hex'),
+          methodology: 'VM0007',
+          geography: 'BRA',
+          external_registry_ref: real.nativeToScVal(
+            Buffer.from('VERRA:123'),
+            { type: 'bytes' },
+          ),
+          verifying_key_version: 3,
+        },
+        { type: 'contract' },
+      ),
+  }),
+);
 
 describe('CambiumClient', () => {
   const validConfig = {

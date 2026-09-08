@@ -2,87 +2,27 @@
  * Unit tests for the MarketplaceModule.
  */
 
+import { mockStellarSdk } from '../helpers/mockStellarSdk';
+import * as StellarSdk from '@stellar/stellar-sdk';
 import { CambiumClient } from '../../src/client';
 import { ConfigError } from '../../src/errors';
-import * as StellarSdk from '@stellar/stellar-sdk';
 
 // Mock the StellarSdk module
-jest.mock('@stellar/stellar-sdk', () => {
-  const real = jest.requireActual('@stellar/stellar-sdk');
-
-  const poolId = Buffer.from('44'.repeat(32), 'hex');
-  const poolRetval = real.nativeToScVal(
-    {
-      id: poolId,
-      credit_token: 'C...TOKEN',
-      paired_asset: 'XLM',
-      credit_reserves: 10000n,
-      paired_reserves: 20000n,
-    },
-    { type: 'contract' },
-  );
-
-  const mockServer = {
-    getLatestLedger: jest.fn().mockResolvedValue({ sequence: 12345 }),
-    getAccount: jest.fn().mockResolvedValue({
-      accountId: 'GABC',
-      sequence: '0',
-    }),
-    simulateTransaction: jest.fn().mockResolvedValue({
-      transactionData: {
-        build: jest.fn().mockReturnValue('mock-soroban-data'),
-        toXDR: jest.fn().mockReturnValue('mock-soroban-data'),
-      },
-      minResourceFee: '100',
-      result: { retval: poolRetval },
-    }),
-    sendTransaction: jest.fn().mockResolvedValue({
-      status: 'SUCCESS',
-      hash: 'abc123',
-    }),
-  };
-
-  return {
-    ...real,
-    SorobanRpc: {
-      Server: jest.fn().mockImplementation(() => mockServer),
-      Api: {
-        isSimulationError: jest.fn().mockReturnValue(false),
-      },
-    },
-    Contract: jest.fn().mockImplementation(() => ({
-      call: jest.fn().mockReturnValue({}),
-    })),
-    Address: jest.fn().mockImplementation((addr: string) => ({
-      toScVal: jest.fn().mockReturnValue({ address: addr }),
-    })),
-    TransactionBuilder: Object.assign(
-      jest.fn().mockImplementation(() => ({
-        addOperation: jest.fn().mockReturnThis(),
-        setTimeout: jest.fn().mockReturnThis(),
-        build: jest.fn().mockReturnValue({
-          toXDR: jest.fn().mockReturnValue('mock-xdr'),
-        }),
-      })),
-      {
-        cloneFrom: jest.fn().mockImplementation(() => ({
-          build: jest.fn().mockReturnValue({
-            toXDR: jest.fn().mockReturnValue('mock-xdr'),
-          }),
-        })),
-        fromXDR: jest.fn().mockReturnValue({}),
-      },
-    ),
-    TimeoutInfinite: 0,
-    BASE_FEE: '100',
-    Keypair: {
-      random: jest.fn().mockReturnValue({
-        publicKey: jest.fn().mockReturnValue('GDEF...'),
-      }),
-    },
-    Account: jest.fn(),
-  };
-});
+jest.mock('@stellar/stellar-sdk', () =>
+  mockStellarSdk({
+    retvalBuilder: (real) =>
+      real.nativeToScVal(
+        {
+          id: Buffer.from('44'.repeat(32), 'hex'),
+          credit_token: 'C...TOKEN',
+          paired_asset: 'XLM',
+          credit_reserves: 10000n,
+          paired_reserves: 20000n,
+        },
+        { type: 'contract' },
+      ),
+  }),
+);
 
 describe('MarketplaceModule', () => {
   const validConfig = {
