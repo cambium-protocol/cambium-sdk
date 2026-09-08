@@ -77,16 +77,12 @@ const client = new CambiumClient({
   },
 });
 
-// Read: get a project's issuance summary
-const project = await client.registry.getProject('project-id-hash');
-console.log(project.totalIssued, project.totalRetired);
+// Read: get a project vintage's issuance summary
+const vintage = await client.registry.getVintage('project-id-hash', 2025);
+console.log(vintage.totalIssued, vintage.totalRetired);
 
-// Read: check a wallet's credit balance for a given vintage
-const balance = await client.credits.balanceOf({
-  address: 'GABC...',
-  projectId: 'project-id-hash',
-  vintageYear: 2025,
-});
+// Read: check a wallet's credit balance
+const balance = await client.credits.balanceOf('GABC...');
 
 // Write: buy credits via the AMM pool (returns an unsigned transaction)
 const tx = await client.marketplace.swap({
@@ -260,9 +256,7 @@ All SDK methods throw a typed `CambiumError` subclass on failure:
 try {
   await client.marketplace.swap({ /* ... */ });
 } catch (err) {
-  if (err instanceof InsufficientLiquidityError) {
-    // handle specifically
-  } else if (err instanceof ContractError) {
+  if (err instanceof ContractError) {
     console.error(err.code, err.message); // maps to on-chain error codes
   } else if (err instanceof TxFailureError) {
     console.error(err.hash, err.status); // tx finalized as FAILED
